@@ -41,7 +41,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   String _errorMessage = '';
 
   final String apiUrl =
-      'https://script.google.com/macros/s/AKfycbz23YaHbMW2qXKCOeOSgwZbJb6O-U4Xcfh7LdHhiSF4BrV6tt9alOPd8Z7bkwn62HJdIg/exec';
+      'https://script.google.com/macros/s/AKfycbwRwyjkaaQZ0N4wyfNOfwZqCeJP4idUKJaINn8SQXKwEJp9hyTGv9AyJekyyicpUSWWVA/exec';
 
   @override
   void initState() {
