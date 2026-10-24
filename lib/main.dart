@@ -95,7 +95,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     List<dynamic> itemsList = _allData['ITEMS'] ?? _allData['ITEM '] ?? [];
     List<dynamic> customersList = _allData['CUSTOMERS'] ?? [];
-    List<dynamic> estimatesList = _allData['ESTIMATES'] ?? [];
 
     List<Widget> screens = [
       EstimateScreen(
@@ -186,7 +185,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 }
 
 // -------------------------------------------------------------
-// 1. ESTIMATE BILLING SCREEN (Multi-Item Invoice)
+// 1. ESTIMATE BILLING SCREEN
 // -------------------------------------------------------------
 class EstimateScreen extends StatefulWidget {
   final List<dynamic> items;
@@ -219,6 +218,97 @@ class _EstimateScreenState extends State<EstimateScreen> {
       sum += (b['total'] as num).toDouble();
     }
     return sum;
+  }
+
+  void _showAddCustomerDialog() {
+    final nameCtrl = TextEditingController();
+    final b2bCtrl = TextEditingController();
+    final b2cCtrl = TextEditingController();
+    final remarksCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text('Add New Customer'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Customer Name *')),
+              TextField(controller: b2bCtrl, decoration: const InputDecoration(labelText: 'B2B Name')),
+              TextField(controller: b2cCtrl, decoration: const InputDecoration(labelText: 'B2C Name')),
+              TextField(controller: remarksCtrl, decoration: const InputDecoration(labelText: 'Remarks')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameCtrl.text.trim().isEmpty) return;
+              Navigator.pop(ctx);
+              final ok = await widget.onAddCustomer({
+                'SL NO': '',
+                'NAME': nameCtrl.text.trim().toUpperCase(),
+                'B2C': b2cCtrl.text.trim(),
+                'B2B': b2bCtrl.text.trim(),
+                'REMARKS': remarksCtrl.text.trim(),
+              });
+              if (ok) {
+                setState(() => selectedCustomer = nameCtrl.text.trim().toUpperCase());
+              }
+            },
+            child: const Text('Save Customer'),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showAddItemDialog() {
+    final nameCtrl = TextEditingController();
+    final rateCtrl = TextEditingController();
+    final tallyCtrl = TextEditingController();
+    final rateTypeCtrl = TextEditingController(text: 'RATE PER KG');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text('Add New Item'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Item Name *')),
+              TextField(controller: rateCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Rate (₹) *')),
+              TextField(controller: tallyCtrl, decoration: const InputDecoration(labelText: 'Name on Tally')),
+              TextField(controller: rateTypeCtrl, decoration: const InputDecoration(labelText: 'Rate Per (KG / BAG)')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameCtrl.text.trim().isEmpty) return;
+              Navigator.pop(ctx);
+              await widget.onAddItem({
+                'ITEM NAME': nameCtrl.text.trim().toUpperCase(),
+                'RATE PER KG/BAG': rateTypeCtrl.text.trim(),
+                'RATE': double.tryParse(rateCtrl.text) ?? 0,
+                'NAME OF ITEM IN TALLY': tallyCtrl.text.trim(),
+                'ITEM NAME ON TALLY': tallyCtrl.text.trim(),
+                'BILLED IN': 'KILOGRAM',
+                'TAXABLE OR NOT': 'NON TAXABLE',
+              });
+            },
+            child: const Text('Save Item'),
+          )
+        ],
+      ),
+    );
   }
 
   void _openCustomerPicker() {
@@ -330,7 +420,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   TextField(
                     onChanged: (val) => setModalState(() => filter = val),
                     decoration: InputDecoration(
-                      hintText: 'Search 500+ items...',
+                      hintText: 'Search items...',
                       prefixIcon: const Icon(Icons.search),
                       filled: true,
                       fillColor: const Color(0xFF2A2A2A),
@@ -348,3 +438,595 @@ class _EstimateScreenState extends State<EstimateScreen> {
                         final unit = item['RATE PER KG/BAG'] ?? '';
 
                         return ListTile(
+                          title: Text(name.toString()),
+                          trailing: Text('₹$rate', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                          subtitle: Text(unit.toString(), style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            _promptQuantity(item);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _promptQuantity(Map<String, dynamic> item) {
+    final qtyController = TextEditingController(text: '1');
+    final rateController = TextEditingController(text: (item['RATE'] ?? '0').toString());
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(item['ITEM NAME'] ?? 'Quantity', style: const TextStyle(fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: qtyController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Quantity / Bags / KG'),
+            ),
+            TextField(
+              controller: rateController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Rate (₹)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final qty = double.tryParse(qtyController.text) ?? 1.0;
+              final rate = double.tryParse(rateController.text) ?? 0.0;
+              setState(() {
+                billItems.add({
+                  'name': item['ITEM NAME'],
+                  'rate': rate,
+                  'qty': qty,
+                  'unit': item['RATE PER KG/BAG'] ?? '',
+                  'total': qty * rate,
+                });
+              });
+              Navigator.pop(ctx);
+            },
+            child: const Text('Add'),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _saveEstimate() async {
+    if (selectedCustomer.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a customer')));
+      return;
+    }
+    if (billItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please add at least one item')));
+      return;
+    }
+
+    setState(() => isSaving = true);
+
+    String summary = billItems.map((b) => "${b['name']} (${b['qty']} x ${b['rate']})").join(", ");
+    final estData = {
+      'ESTIMATE NO': 'EST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+      'DATE': DateTime.now().toString().substring(0, 10),
+      'CUSTOMER NAME': selectedCustomer,
+      'ITEMS SUMMARY': summary,
+      'TOTAL AMOUNT': grandTotal,
+    };
+
+    final ok = await widget.onSaveEstimate(estData);
+    setState(() => isSaving = false);
+
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Estimate Saved to Sheet!')));
+      setState(() {
+        billItems.clear();
+        selectedCustomer = '';
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save estimate')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          color: const Color(0xFF1A1A1A),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: _openCustomerPicker,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2A2A2A),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          selectedCustomer.isEmpty ? 'Select Customer *' : selectedCustomer,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: selectedCustomer.isEmpty ? Colors.grey : Colors.blueAccent,
+                          ),
+                        ),
+                        const Icon(Icons.arrow_drop_down, color: Colors.blueAccent),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Item'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                onPressed: _openItemPicker,
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: billItems.isEmpty
+              ? const Center(child: Text('No items in bill yet. Tap + Item to add.', style: TextStyle(color: Colors.grey)))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: billItems.length,
+                  itemBuilder: (context, idx) {
+                    final item = billItems[idx];
+                    return Card(
+                      color: const Color(0xFF1E1E1E),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        title: Text(item['name'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('${item['qty']} x ₹${item['rate']} (${item['unit']})'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('₹${item['total']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                              onPressed: () => setState(() => billItems.removeAt(idx)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: const Color(0xFF1E1E1E),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Grand Total', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  Text('₹$grandTotal', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                ],
+              ),
+              ElevatedButton.icon(
+                icon: isSaving
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.check_circle),
+                label: const Text('Save Estimate'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
+                onPressed: isSaving ? null : _saveEstimate,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// 2. ITEMS TAB (PRICE LIST)
+// -------------------------------------------------------------
+class PriceListTab extends StatefulWidget {
+  final List<dynamic> items;
+  final Future<bool> Function(Map<String, dynamic>) onAddItem;
+  final Future<bool> Function(String, Map<String, dynamic>) onEditItem;
+
+  const PriceListTab({
+    super.key,
+    required this.items,
+    required this.onAddItem,
+    required this.onEditItem,
+  });
+
+  @override
+  State<PriceListTab> createState() => _PriceListTabState();
+}
+
+class _PriceListTabState extends State<PriceListTab> {
+  String searchQuery = '';
+
+  void _showItemDialog([Map<String, dynamic>? existing]) {
+    final nameCtrl = TextEditingController(text: existing?['ITEM NAME'] ?? '');
+    final rateCtrl = TextEditingController(text: existing?['RATE']?.toString() ?? '');
+    final tallyCtrl = TextEditingController(text: existing?['NAME OF ITEM IN TALLY'] ?? existing?['ITEM NAME ON TALLY'] ?? '');
+    final rateTypeCtrl = TextEditingController(text: existing?['RATE PER KG/BAG'] ?? 'RATE PER KG');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(existing == null ? 'Add New Item' : 'Edit Item'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                enabled: existing == null,
+                decoration: const InputDecoration(labelText: 'Item Name *'),
+              ),
+              TextField(
+                controller: rateCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Rate (₹) *'),
+              ),
+              TextField(
+                controller: tallyCtrl,
+                decoration: const InputDecoration(labelText: 'Item Name on Tally'),
+              ),
+              TextField(
+                controller: rateTypeCtrl,
+                decoration: const InputDecoration(labelText: 'Rate Per (KG / BAG)'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameCtrl.text.trim().isEmpty) return;
+              Navigator.pop(ctx);
+              final payload = {
+                'ITEM NAME': nameCtrl.text.trim().toUpperCase(),
+                'RATE PER KG/BAG': rateTypeCtrl.text.trim(),
+                'RATE': double.tryParse(rateCtrl.text) ?? 0,
+                'NAME OF ITEM IN TALLY': tallyCtrl.text.trim(),
+                'ITEM NAME ON TALLY': tallyCtrl.text.trim(),
+              };
+
+              if (existing == null) {
+                await widget.onAddItem(payload);
+              } else {
+                await widget.onEditItem(existing['ITEM NAME'], payload);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.items.where((rawItem) {
+      final item = rawItem as Map<String, dynamic>;
+      final name = (item['ITEM NAME'] ?? '').toString().toLowerCase();
+      final tally = (item['ITEM NAME ON TALLY'] ?? item['NAME OF ITEM IN TALLY'] ?? '').toString().toLowerCase();
+      final q = searchQuery.toLowerCase();
+      return name.contains(q) || tally.contains(q);
+    }).toList();
+
+    return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.blueAccent,
+        onPressed: () => _showItemDialog(),
+        child: const Icon(Icons.add),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: TextField(
+              onChanged: (val) => setState(() => searchQuery = val),
+              decoration: InputDecoration(
+                hintText: 'Search items or tally names...',
+                prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
+                filled: true,
+                fillColor: const Color(0xFF1E1E1E),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: filtered.length,
+              itemBuilder: (context, index) {
+                final item = filtered[index] as Map<String, dynamic>;
+                final name = item['ITEM NAME'] ?? '-';
+                final rate = item['RATE']?.toString() ?? '-';
+                final rateType = item['RATE PER KG/BAG'] ?? '';
+                final tally = item['ITEM NAME ON TALLY'] ?? item['NAME OF ITEM IN TALLY'] ?? '-';
+
+                return Card(
+                  color: const Color(0xFF1E1E1E),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text('Tally: $tally\n$rateType', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('₹$rate', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                        IconButton(
+                          icon: const Icon(Icons.edit, size: 18, color: Colors.grey),
+                          onPressed: () => _showItemDialog(item),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// 3. CUSTOMERS TAB
+// -------------------------------------------------------------
+class CustomersTab extends StatefulWidget {
+  final List<dynamic> customers;
+  final Future<bool> Function(Map<String, dynamic>) onAddCustomer;
+  final Future<bool> Function(String, Map<String, dynamic>) onEditCustomer;
+
+  const CustomersTab({
+    super.key,
+    required this.customers,
+    required this.onAddCustomer,
+    required this.onEditCustomer,
+  });
+
+  @override
+  State<CustomersTab> createState() => _CustomersTabState();
+}
+
+class _CustomersTabState extends State<CustomersTab> {
+  String searchQuery = '';
+
+  void _showCustomerDialog([Map<String, dynamic>? existing]) {
+    final nameCtrl = TextEditingController(text: existing?['NAME'] ?? '');
+    final b2bCtrl = TextEditingController(text: existing?['B2B'] ?? '');
+    final b2cCtrl = TextEditingController(text: existing?['B2C'] ?? '');
+    final remarksCtrl = TextEditingController(text: existing?['REMARKS'] ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: Text(existing == null ? 'Add New Customer' : 'Edit Customer'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameCtrl, enabled: existing == null, decoration: const InputDecoration(labelText: 'Customer Name *')),
+              TextField(controller: b2bCtrl, decoration: const InputDecoration(labelText: 'B2B / GST Name')),
+              TextField(controller: b2cCtrl, decoration: const InputDecoration(labelText: 'B2C Name')),
+              TextField(controller: remarksCtrl, decoration: const InputDecoration(labelText: 'Remarks')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameCtrl.text.trim().isEmpty) return;
+              Navigator.pop(ctx);
+              final payload = {
+                'NAME': nameCtrl.text.trim().toUpperCase(),
+                'B2B': b2bCtrl.text.trim(),
+                'B2C': b2cCtrl.text.trim(),
+                'REMARKS': remarksCtrl.text.trim(),
+              };
+
+              if (existing == null) {
+                await widget.onAddCustomer(payload);
+              } else {
+                await widget.onEditCustomer(existing['NAME'], payload);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = widget.customers.where((rawCust) {
+      final c = rawCust as Map<String, dynamic>;
+      final name = (c['NAME'] ?? '').toString().toLowerCase();
+      final b2b = (c['B2B'] ?? '').toString().toLowerCase();
+      final q = searchQuery.toLowerCase();
+      return name.contains(q) || b2b.contains(q);
+    }).toList();
+
+    return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.blueAccent,
+        onPressed: () => _showCustomerDialog(),
+        child: const Icon(Icons.person_add),
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: TextField(
+              onChanged: (val) => setState(() => searchQuery = val),
+              decoration: InputDecoration(
+                hintText: 'Search customers...',
+                prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
+                filled: true,
+                fillColor: const Color(0xFF1E1E1E),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: filtered.length,
+              itemBuilder: (context, index) {
+                final c = filtered[index] as Map<String, dynamic>;
+                final name = c['NAME'] ?? '-';
+                final b2b = c['B2B'] ?? '';
+                final remarks = c['REMARKS'] ?? '';
+
+                return Card(
+                  color: const Color(0xFF1E1E1E),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (b2b.toString().isNotEmpty) Text('B2B: $b2b', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                        if (remarks.toString().isNotEmpty) Text('Remarks: $remarks', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                      ],
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.edit, size: 18, color: Colors.grey),
+                      onPressed: () => _showCustomerDialog(c),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// 4. CALCULATOR TAB
+// -------------------------------------------------------------
+class CalculatorTab extends StatefulWidget {
+  const CalculatorTab({super.key});
+
+  @override
+  State<CalculatorTab> createState() => _CalculatorTabState();
+}
+
+class _CalculatorTabState extends State<CalculatorTab> {
+  String display = '0';
+  double firstOperand = 0;
+  String operator = '';
+  bool shouldResetDisplay = false;
+
+  void onBtnClick(String text) {
+    setState(() {
+      if (text == 'C') {
+        display = '0';
+        firstOperand = 0;
+        operator = '';
+      } else if (text == '+' || text == '-' || text == '×' || text == '÷') {
+        firstOperand = double.tryParse(display) ?? 0;
+        operator = text;
+        shouldResetDisplay = true;
+      } else if (text == '=') {
+        double secondOperand = double.tryParse(display) ?? 0;
+        double res = 0;
+        if (operator == '+') res = firstOperand + secondOperand;
+        if (operator == '-') res = firstOperand - secondOperand;
+        if (operator == '×') res = firstOperand * secondOperand;
+        if (operator == '÷') res = secondOperand != 0 ? firstOperand / secondOperand : 0;
+
+        display = res.toString().endsWith('.0') ? res.toInt().toString() : res.toString();
+        operator = '';
+      } else {
+        if (display == '0' || shouldResetDisplay) {
+          display = text;
+          shouldResetDisplay = false;
+        } else {
+          display += text;
+        }
+      }
+    });
+  }
+
+  Widget calcBtn(String text, {Color? bg, Color? fg}) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.all(6.0),
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: bg ?? const Color(0xFF2A2A2A),
+            foregroundColor: fg ?? Colors.white,
+            padding: const EdgeInsets.all(22),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          onPressed: () => onBtnClick(text),
+          child: Text(text, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          child: Container(
+            alignment: Alignment.bottomRight,
+            padding: const EdgeInsets.all(24),
+            child: Text(display, style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+          ),
+        ),
+        Column(
+          children: [
+            Row(children: [calcBtn('C', bg: Colors.redAccent), calcBtn('÷', bg: Colors.orangeAccent), calcBtn('×', bg: Colors.orangeAccent), calcBtn('-', bg: Colors.orangeAccent)]),
+            Row(children: [calcBtn('7'), calcBtn('8'), calcBtn('9'), calcBtn('+', bg: Colors.orangeAccent)]),
+            Row(children: [calcBtn('4'), calcBtn('5'), calcBtn('6'), calcBtn('0')]),
+            Row(children: [calcBtn('1'), calcBtn('2'), calcBtn('3'), calcBtn('=', bg: Colors.green)]),
+          ],
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+}
