@@ -41,7 +41,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   String _errorMessage = '';
 
   final String apiUrl =
-      'https://script.google.com/macros/s/AKfycbz4vjihG3qdOxmhIaCI_Fom2YhNunczRwkc5FqDTcENFoLNPeaLu4J8jCRLnqeQO_-HzQ/exec';
+      'https://script.google.com/macros/s/AKfycbz23YaHbMW2qXKCOeOSgwZbJb6O-U4Xcfh7LdHhiSF4BrV6tt9alOPd8Z7bkwn62HJdIg/exec';
 
   @override
   void initState() {
@@ -75,22 +75,84 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
   }
 
+  Future<bool> sendSheetRequest(Map<String, dynamic> payload) async {
+    try {
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        body: json.encode(payload),
+      );
+      if (response.statusCode == 200) {
+        await fetchData();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Reading exact keys from Google Sheets API
-    List<dynamic> itemsList = _allData['ITEM '] ?? _allData['ITEM'] ?? [];
-    List<dynamic> billsList = _allData['BILL'] ?? [];
-    List<dynamic> cooliList = _allData['COOLI CALCULATOR'] ?? [];
+    List<dynamic> itemsList = _allData['ITEMS'] ?? _allData['ITEM '] ?? [];
+    List<dynamic> customersList = _allData['CUSTOMERS'] ?? [];
+    List<dynamic> estimatesList = _allData['ESTIMATES'] ?? [];
 
     List<Widget> screens = [
-      PriceListTab(items: itemsList),
-      BillsTab(bills: billsList),
-      CooliTab(cooli: cooliList),
+      EstimateScreen(
+        items: itemsList,
+        customers: customersList,
+        onSaveEstimate: (estData) async => await sendSheetRequest({
+          'action': 'add',
+          'tab': 'ESTIMATES',
+          'data': estData,
+        }),
+        onAddCustomer: (custData) async => await sendSheetRequest({
+          'action': 'add',
+          'tab': 'CUSTOMERS',
+          'data': custData,
+        }),
+        onAddItem: (itemData) async => await sendSheetRequest({
+          'action': 'add',
+          'tab': 'ITEMS',
+          'data': itemData,
+        }),
+      ),
+      PriceListTab(
+        items: itemsList,
+        onAddItem: (itemData) async => await sendSheetRequest({
+          'action': 'add',
+          'tab': 'ITEMS',
+          'data': itemData,
+        }),
+        onEditItem: (itemName, updatedData) async => await sendSheetRequest({
+          'action': 'edit',
+          'tab': 'ITEMS',
+          'keyName': 'ITEM NAME',
+          'keyValue': itemName,
+          'data': updatedData,
+        }),
+      ),
+      CustomersTab(
+        customers: customersList,
+        onAddCustomer: (custData) async => await sendSheetRequest({
+          'action': 'add',
+          'tab': 'CUSTOMERS',
+          'data': custData,
+        }),
+        onEditCustomer: (custName, updatedData) async => await sendSheetRequest({
+          'action': 'edit',
+          'tab': 'CUSTOMERS',
+          'keyName': 'NAME',
+          'keyValue': custName,
+          'data': updatedData,
+        }),
+      ),
+      const CalculatorTab(),
     ];
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('DC PRIME', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('DC PRIME', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1)),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: fetchData),
         ],
@@ -110,199 +172,179 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         backgroundColor: const Color(0xFF1E1E1E),
         selectedItemColor: Colors.blueAccent,
         unselectedItemColor: Colors.grey,
+        type: BottomNavigationBarType.fixed,
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Estimate'),
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Price List'),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Bills'),
-          BottomNavigationBarItem(icon: Icon(Icons.calculate), label: 'Cooli'),
+          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Customers'),
+          BottomNavigationBarItem(icon: Icon(Icons.calculate), label: 'Calculator'),
         ],
       ),
     );
   }
 }
 
-// 1. PRICE LIST TAB (Search & Item Details)
-class PriceListTab extends StatefulWidget {
+// -------------------------------------------------------------
+// 1. ESTIMATE BILLING SCREEN (Multi-Item Invoice)
+// -------------------------------------------------------------
+class EstimateScreen extends StatefulWidget {
   final List<dynamic> items;
-  const PriceListTab({super.key, required this.items});
+  final List<dynamic> customers;
+  final Future<bool> Function(Map<String, dynamic>) onSaveEstimate;
+  final Future<bool> Function(Map<String, dynamic>) onAddCustomer;
+  final Future<bool> Function(Map<String, dynamic>) onAddItem;
+
+  const EstimateScreen({
+    super.key,
+    required this.items,
+    required this.customers,
+    required this.onSaveEstimate,
+    required this.onAddCustomer,
+    required this.onAddItem,
+  });
 
   @override
-  State<PriceListTab> createState() => _PriceListTabState();
+  State<EstimateScreen> createState() => _EstimateScreenState();
 }
 
-class _PriceListTabState extends State<PriceListTab> {
-  String searchQuery = '';
+class _EstimateScreenState extends State<EstimateScreen> {
+  String selectedCustomer = '';
+  List<Map<String, dynamic>> billItems = [];
+  bool isSaving = false;
 
-  @override
-  Widget build(BuildContext context) {
-    final filtered = widget.items.where((rawItem) {
-      final item = rawItem as Map<String, dynamic>;
-      final name = (item['ITEM NAME'] ?? '').toString().toLowerCase();
-      final tally = (item['ITEM NAME ON TALLY'] ?? '').toString().toLowerCase();
-      final q = searchQuery.toLowerCase();
-      return name.contains(q) || tally.contains(q);
-    }).toList();
+  double get grandTotal {
+    double sum = 0;
+    for (var b in billItems) {
+      sum += (b['total'] as num).toDouble();
+    }
+    return sum;
+  }
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: TextField(
-            onChanged: (val) => setState(() => searchQuery = val),
-            decoration: InputDecoration(
-              hintText: 'Search 500+ items or tally names...',
-              prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
-              filled: true,
-              fillColor: const Color(0xFF1E1E1E),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+  void _openCustomerPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        String filter = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filteredCusts = widget.customers.where((c) {
+              final name = (c['NAME'] ?? '').toString().toLowerCase();
+              return name.contains(filter.toLowerCase());
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Select Customer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      TextButton.icon(
+                        icon: const Icon(Icons.person_add, color: Colors.blueAccent),
+                        label: const Text('New', style: TextStyle(color: Colors.blueAccent)),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showAddCustomerDialog();
+                        },
+                      )
+                    ],
+                  ),
+                  TextField(
+                    onChanged: (val) => setModalState(() => filter = val),
+                    decoration: InputDecoration(
+                      hintText: 'Search customer name...',
+                      prefixIcon: const Icon(Icons.search),
+                      filled: true,
+                      fillColor: const Color(0xFF2A2A2A),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: filteredCusts.length,
+                      itemBuilder: (context, idx) {
+                        final c = filteredCusts[idx];
+                        final name = c['NAME'] ?? '';
+                        final b2b = c['B2B'] ?? '';
+                        return ListTile(
+                          title: Text(name.toString()),
+                          subtitle: b2b.toString().isNotEmpty ? Text(b2b.toString(), style: const TextStyle(color: Colors.grey, fontSize: 12)) : null,
+                          onTap: () {
+                            setState(() => selectedCustomer = name.toString());
+                            Navigator.pop(ctx);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: filtered.isEmpty
-              ? const Center(child: Text('No items found'))
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final item = filtered[index] as Map<String, dynamic>;
-                    final name = item['ITEM NAME'] ?? '-';
-                    final rate = item['RATE']?.toString() ?? '-';
-                    final rateType = item['RATE PER KG/BAG'] ?? '';
-                    final tally = item['ITEM NAME ON TALLY'] ?? '-';
-                    final taxable = item['TAXABLE OR NOT'] ?? '';
-
-                    if (name.toString().trim().isEmpty) return const SizedBox.shrink();
-
-                    return Card(
-                      color: const Color(0xFF1E1E1E),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      child: ListTile(
-                        title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 4),
-                            Text('Tally: $tally', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                            if (taxable.toString().isNotEmpty)
-                              Text(
-                                taxable.toString(),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: taxable.toString().contains('NON') ? Colors.greenAccent : Colors.orangeAccent,
-                                ),
-                              ),
-                          ],
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '₹$rate',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                            ),
-                            Text(rateType.toString(), style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-// 2. BILLS TAB
-class BillsTab extends StatelessWidget {
-  final List<dynamic> bills;
-  const BillsTab({super.key, required this.bills});
-
-  @override
-  Widget build(BuildContext context) {
-    final validBills = bills.where((b) => (b['BILL ID'] ?? '').toString().isNotEmpty).toList();
-
-    if (validBills.isEmpty) {
-      return const Center(child: Text('No bills available'));
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: validBills.length,
-      itemBuilder: (context, index) {
-        final bill = validBills[index] as Map<String, dynamic>;
-        final billId = bill['BILL ID'] ?? '-';
-        final tallyId = bill['TALLY INVOICE ID'] ?? '-';
-        final customer = bill['CUSTOMER']?.toString() ?? '-';
-        final amount = bill['AMOUNT']?.toString() ?? '0';
-
-        return Card(
-          color: const Color(0xFF1E1E1E),
-          margin: const EdgeInsets.only(bottom: 10),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(billId.toString(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                    const SizedBox(height: 4),
-                    Text('Customer ID: $customer', style: const TextStyle(color: Colors.grey)),
-                    Text('Invoice: $tallyId', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                  ],
-                ),
-                Text('₹$amount', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
-              ],
-            ),
-          ),
+            );
+          },
         );
       },
     );
   }
-}
 
-// 3. COOLI TAB
-class CooliTab extends StatelessWidget {
-  final List<dynamic> cooli;
-  const CooliTab({super.key, required this.cooli});
+  void _openItemPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        String filter = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final filteredItems = widget.items.where((it) {
+              final name = (it['ITEM NAME'] ?? '').toString().toLowerCase();
+              return name.contains(filter.toLowerCase());
+            }).toList();
 
-  @override
-  Widget build(BuildContext context) {
-    if (cooli.isEmpty) {
-      return const Center(child: Text('No calculation records found'));
-    }
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.8,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Add Item to Bill', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      TextButton.icon(
+                        icon: const Icon(Icons.add_box, color: Colors.blueAccent),
+                        label: const Text('New Item', style: TextStyle(color: Colors.blueAccent)),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showAddItemDialog();
+                        },
+                      )
+                    ],
+                  ),
+                  TextField(
+                    onChanged: (val) => setModalState(() => filter = val),
+                    decoration: InputDecoration(
+                      hintText: 'Search 500+ items...',
+                      prefixIcon: const Icon(Icons.search),
+                      filled: true,
+                      fillColor: const Color(0xFF2A2A2A),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: filteredItems.length,
+                      itemBuilder: (context, idx) {
+                        final item = filteredItems[idx];
+                        final name = item['ITEM NAME'] ?? '';
+                        final rate = double.tryParse(item['RATE']?.toString() ?? '0') ?? 0.0;
+                        final unit = item['RATE PER KG/BAG'] ?? '';
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: cooli.length,
-      itemBuilder: (context, index) {
-        final c = cooli[index] as Map<String, dynamic>;
-        final customer = c['CUSTOMER']?.toString() ?? '-';
-        final rice50 = c['RICE 50KG']?.toString() ?? '0';
-        final rice26 = c['RICE 26KG']?.toString() ?? '0';
-        final cooliCharge = c['COOLI']?.toString() ?? '0';
-
-        return Card(
-          color: const Color(0xFF1E1E1E),
-          margin: const EdgeInsets.only(bottom: 10),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          child: ListTile(
-            title: Text('Customer: $customer', style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text('Rice 50kg: $rice50 | Rice 26kg: $rice26', style: const TextStyle(color: Colors.grey)),
-            trailing: Text('Cooli: ₹$cooliCharge', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-          ),
-        );
-      },
-    );
-  }
-}
+                        return ListTile(
