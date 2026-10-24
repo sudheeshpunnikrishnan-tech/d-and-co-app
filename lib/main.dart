@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 
 void main() {
   runApp(const DAndCoApp());
@@ -18,7 +17,10 @@ class DAndCoApp extends StatelessWidget {
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF121212),
         primaryColor: Colors.blueAccent,
-        appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF1E1E1E)),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1E1E1E),
+          elevation: 0,
+        ),
       ),
       home: const MainNavigationScreen(),
     );
@@ -75,11 +77,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Reading exact keys from Google Sheets API
+    List<dynamic> itemsList = _allData['ITEM '] ?? _allData['ITEM'] ?? [];
+    List<dynamic> billsList = _allData['BILL'] ?? [];
+    List<dynamic> cooliList = _allData['COOLI CALCULATOR'] ?? [];
+
     List<Widget> screens = [
-      VehiclesTab(data: _allData['VEHICLE DETAILS'] ?? _allData['VEHICLES'] ?? []),
-      GenericListTab(title: 'Customers', data: _allData['CUSTOMERS'] ?? _allData['CUSTOMERS LIST'] ?? []),
-      GenericListTab(title: 'Price List', data: _allData['PRICE LIST'] ?? _allData['ITEMS'] ?? []),
-      GenericListTab(title: 'Cooli Calculator', data: _allData['COOLI CALCULATOR'] ?? []),
+      PriceListTab(items: itemsList),
+      BillsTab(bills: billsList),
+      CooliTab(cooli: cooliList),
     ];
 
     return Scaffold(
@@ -92,19 +98,22 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage.isNotEmpty
-              ? Center(child: Text(_errorMessage, style: const TextStyle(color: Colors.redAccent)))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(_errorMessage, style: const TextStyle(color: Colors.redAccent)),
+                  ),
+                )
               : screens[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        type: BottomNavigationBarType.fixed,
         backgroundColor: const Color(0xFF1E1E1E),
         selectedItemColor: Colors.blueAccent,
         unselectedItemColor: Colors.grey,
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.local_shipping), label: 'Vehicles'),
-          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Customers'),
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Price List'),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Bills'),
           BottomNavigationBarItem(icon: Icon(Icons.calculate), label: 'Cooli'),
         ],
       ),
@@ -112,76 +121,147 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 }
 
-class VehiclesTab extends StatelessWidget {
-  final List<dynamic> data;
-  const VehiclesTab({super.key, required this.data});
+// 1. PRICE LIST TAB (Search & Item Details)
+class PriceListTab extends StatefulWidget {
+  final List<dynamic> items;
+  const PriceListTab({super.key, required this.items});
 
-  Color getDueDateColor(dynamic dateStr) {
-    if (dateStr == null || dateStr.toString().isEmpty) return Colors.white;
-    try {
-      DateTime dueDate = DateTime.parse(dateStr.toString());
-      DateTime now = DateTime.now();
-      DateTime today = DateTime(now.year, now.month, now.day);
-      DateTime cleanDue = DateTime(dueDate.year, dueDate.month, dueDate.day);
+  @override
+  State<PriceListTab> createState() => _PriceListTabState();
+}
 
-      if (cleanDue.isBefore(today)) {
-        return Colors.redAccent;
-      } else if (cleanDue.difference(today).inDays <= 7) {
-        return Colors.amber;
-      }
-      return Colors.white;
-    } catch (_) {
-      return Colors.white;
-    }
-  }
-
-  String formatDisplayDate(dynamic dateStr) {
-    if (dateStr == null || dateStr.toString().isEmpty) return '-';
-    try {
-      DateTime dt = DateTime.parse(dateStr.toString());
-      return DateFormat('dd-MMMM-yyyy').format(dt);
-    } catch (_) {
-      return dateStr.toString();
-    }
-  }
+class _PriceListTabState extends State<PriceListTab> {
+  String searchQuery = '';
 
   @override
   Widget build(BuildContext context) {
-    if (data.isEmpty) {
-      return const Center(child: Text('No vehicle data found'));
+    final filtered = widget.items.where((rawItem) {
+      final item = rawItem as Map<String, dynamic>;
+      final name = (item['ITEM NAME'] ?? '').toString().toLowerCase();
+      final tally = (item['ITEM NAME ON TALLY'] ?? '').toString().toLowerCase();
+      final q = searchQuery.toLowerCase();
+      return name.contains(q) || tally.contains(q);
+    }).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: TextField(
+            onChanged: (val) => setState(() => searchQuery = val),
+            decoration: InputDecoration(
+              hintText: 'Search 500+ items or tally names...',
+              prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
+              filled: true,
+              fillColor: const Color(0xFF1E1E1E),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? const Center(child: Text('No items found'))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final item = filtered[index] as Map<String, dynamic>;
+                    final name = item['ITEM NAME'] ?? '-';
+                    final rate = item['RATE']?.toString() ?? '-';
+                    final rateType = item['RATE PER KG/BAG'] ?? '';
+                    final tally = item['ITEM NAME ON TALLY'] ?? '-';
+                    final taxable = item['TAXABLE OR NOT'] ?? '';
+
+                    if (name.toString().trim().isEmpty) return const SizedBox.shrink();
+
+                    return Card(
+                      color: const Color(0xFF1E1E1E),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      child: ListTile(
+                        title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 4),
+                            Text('Tally: $tally', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                            if (taxable.toString().isNotEmpty)
+                              Text(
+                                taxable.toString(),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: taxable.toString().contains('NON') ? Colors.greenAccent : Colors.orangeAccent,
+                                ),
+                              ),
+                          ],
+                        ),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '₹$rate',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                            ),
+                            Text(rateType.toString(), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+// 2. BILLS TAB
+class BillsTab extends StatelessWidget {
+  final List<dynamic> bills;
+  const BillsTab({super.key, required this.bills});
+
+  @override
+  Widget build(BuildContext context) {
+    final validBills = bills.where((b) => (b['BILL ID'] ?? '').toString().isNotEmpty).toList();
+
+    if (validBills.isEmpty) {
+      return const Center(child: Text('No bills available'));
     }
+
     return ListView.builder(
       padding: const EdgeInsets.all(12),
-      itemCount: data.length,
+      itemCount: validBills.length,
       itemBuilder: (context, index) {
-        final item = data[index] as Map<String, dynamic>;
-        final vehNo = item['Vehicle Number'] ?? item['VEHICLE NUMBER'] ?? '-';
-        final driver = item['Driver Name'] ?? item['DRIVER NAME'] ?? '-';
-        final vehType = item['Vehicle Type'] ?? item['VEHICLE TYPE'] ?? '-';
-
-        final insDue = item['Insurance Due'] ?? item['INSURANCE DUE'] ?? '';
-        final taxDue = item['Tax Due'] ?? item['TAX DUE'] ?? '';
-        final permDue = item['Permit Due'] ?? item['PERMIT DUE'] ?? '';
-        final fitDue = item['Fitness Due'] ?? item['FITNESS DUE'] ?? '';
+        final bill = validBills[index] as Map<String, dynamic>;
+        final billId = bill['BILL ID'] ?? '-';
+        final tallyId = bill['TALLY INVOICE ID'] ?? '-';
+        final customer = bill['CUSTOMER']?.toString() ?? '-';
+        final amount = bill['AMOUNT']?.toString() ?? '0';
 
         return Card(
           color: const Color(0xFF1E1E1E),
+          margin: const EdgeInsets.only(bottom: 10),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: const EdgeInsets.only(bottom: 12),
           child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(driver.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                const SizedBox(height: 4),
-                Text(vehNo.toString(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                Text(vehType.toString(), style: const TextStyle(color: Colors.grey)),
-                const Divider(height: 24, color: Colors.white24),
-                _dateRow('Insurance Due:', formatDisplayDate(insDue), getDueDateColor(insDue)),
-                _dateRow('Tax Due:', formatDisplayDate(taxDue), getDueDateColor(taxDue)),
-                _dateRow('Permit Due:', formatDisplayDate(permDue), getDueDateColor(permDue)),
-                _dateRow('Fitness Due:', formatDisplayDate(fitDue), getDueDateColor(fitDue)),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(billId.toString(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                    const SizedBox(height: 4),
+                    Text('Customer ID: $customer', style: const TextStyle(color: Colors.grey)),
+                    Text('Invoice: $tallyId', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  ],
+                ),
+                Text('₹$amount', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
               ],
             ),
           ),
@@ -189,53 +269,37 @@ class VehiclesTab extends StatelessWidget {
       },
     );
   }
-
-  Widget _dateRow(String label, String value, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.white70)),
-          Row(
-            children: [
-              if (color == Colors.redAccent) ...[
-                const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 16),
-                const SizedBox(width: 4),
-              ],
-              if (color == Colors.amber) ...[
-                const Icon(Icons.hourglass_empty, color: Colors.amber, size: 16),
-                const SizedBox(width: 4),
-              ],
-              Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-            ],
-          )
-        ],
-      ),
-    );
-  }
 }
 
-class GenericListTab extends StatelessWidget {
-  final String title;
-  final List<dynamic> data;
-  const GenericListTab({super.key, required this.title, required this.data});
+// 3. COOLI TAB
+class CooliTab extends StatelessWidget {
+  final List<dynamic> cooli;
+  const CooliTab({super.key, required this.cooli});
 
   @override
   Widget build(BuildContext context) {
-    if (data.isEmpty) return Center(child: Text('No data in $title'));
+    if (cooli.isEmpty) {
+      return const Center(child: Text('No calculation records found'));
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.all(12),
-      itemCount: data.length,
+      itemCount: cooli.length,
       itemBuilder: (context, index) {
-        final row = data[index] as Map<String, dynamic>;
-        final entries = row.entries.toList();
+        final c = cooli[index] as Map<String, dynamic>;
+        final customer = c['CUSTOMER']?.toString() ?? '-';
+        final rice50 = c['RICE 50KG']?.toString() ?? '0';
+        final rice26 = c['RICE 26KG']?.toString() ?? '0';
+        final cooliCharge = c['COOLI']?.toString() ?? '0';
+
         return Card(
           color: const Color(0xFF1E1E1E),
-          margin: const EdgeInsets.only(bottom: 8),
+          margin: const EdgeInsets.only(bottom: 10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           child: ListTile(
-            title: Text(entries.isNotEmpty ? '${entries[0].value}' : '', style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text(entries.length > 1 ? '${entries[1].key}: ${entries[1].value}' : ''),
+            title: Text('Customer: $customer', style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('Rice 50kg: $rice50 | Rice 26kg: $rice26', style: const TextStyle(color: Colors.grey)),
+            trailing: Text('Cooli: ₹$cooliCharge', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
           ),
         );
       },
