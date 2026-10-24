@@ -29,17 +29,22 @@ jobs:
         run: |
           flutter create . --org com.dandco.app --project-name d_and_co_app
 
-      - name: Configure Kotlin Version in Settings and Build Gradle
+      - name: Configure Kotlin and Internet Permissions
         run: |
-          # Update settings.gradle (modern Flutter)
+          # 1. Update Kotlin in settings.gradle
           if [ -f android/settings.gradle ]; then
             sed -i 's/org.jetbrains.kotlin.android" version "[^"]*"/org.jetbrains.kotlin.android" version "1.8.22"/g' android/settings.gradle || true
             sed -i 's/id "org.jetbrains.kotlin.android" version .*/id "org.jetbrains.kotlin.android" version "1.8.22" apply false/g' android/settings.gradle || true
           fi
-          # Update build.gradle (fallback)
+          # 2. Update Kotlin in build.gradle
           if [ -f android/build.gradle ]; then
             sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '1.8.22'/g" android/build.gradle || true
             sed -i 's/1.6.0/1.8.22/g' android/build.gradle || true
+          fi
+          # 3. Add INTERNET Permission to AndroidManifest.xml
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>' "$MANIFEST"
           fi
 
       - name: Install Dependencies
