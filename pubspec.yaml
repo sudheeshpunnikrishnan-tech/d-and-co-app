@@ -1,17 +1,18 @@
 name: d_and_co_app
-description: "A billing and inventory app for Davis and Company"
+description: "Davis and Company Billing App"
 publish_to: 'none'
-
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.2.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.0
   url_launcher: ^6.3.0
+  package_info_plus: ^8.0.0
+  ota_update: ^5.0.0
 
 dev_dependencies:
   flutter_test:
@@ -20,4 +21,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  
