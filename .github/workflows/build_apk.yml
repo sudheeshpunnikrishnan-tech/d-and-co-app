@@ -27,7 +27,7 @@ jobs:
 
       - name: Generate Official Android Project Structure
         run: |
-          flutter create --platforms=android --org=com.dcprime .
+          flutter create --project-name=d_and_co_app --platforms=android --org=com.dcprime .
           
           # Android-ൽ ഇന്റർനെറ്റ് പെർമിഷൻ നൽകുന്നു
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>' android/app/src/main/AndroidManifest.xml
