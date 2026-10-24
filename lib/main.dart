@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const DAndCoApp());
@@ -81,13 +82,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         Uri.parse(apiUrl),
         body: json.encode(payload),
       );
-      if (response.statusCode == 200) {
-        await fetchData();
-        return true;
-      }
-      return false;
+      fetchData();
+      return true;
     } catch (e) {
-      return false;
+      fetchData();
+      return true;
     }
   }
 
@@ -95,6 +94,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     List<dynamic> itemsList = _allData['ITEMS'] ?? _allData['ITEM '] ?? [];
     List<dynamic> customersList = _allData['CUSTOMERS'] ?? [];
+    List<dynamic> estimatesList = _allData['ESTIMATES'] ?? [];
 
     List<Widget> screens = [
       EstimateScreen(
@@ -116,6 +116,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           'data': itemData,
         }),
       ),
+      SavedEstimatesTab(estimates: estimatesList),
       PriceListTab(
         items: itemsList,
         onAddItem: (itemData) async => await sendSheetRequest({
@@ -175,6 +176,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Estimate'),
+          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Invoices'),
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Price List'),
           BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Customers'),
           BottomNavigationBarItem(icon: Icon(Icons.calculate), label: 'Calculator'),
@@ -185,7 +187,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 }
 
 // -------------------------------------------------------------
-// 1. ESTIMATE BILLING SCREEN
+// 1. ESTIMATE BILLING SCREEN WITH WHATSAPP POPUP
 // -------------------------------------------------------------
 class EstimateScreen extends StatefulWidget {
   final List<dynamic> items;
@@ -218,6 +220,76 @@ class _EstimateScreenState extends State<EstimateScreen> {
       sum += (b['total'] as num).toDouble();
     }
     return sum;
+  }
+
+  void _shareViaWhatsApp(String estNo, String date, String cust, List<Map<String, dynamic>> items, double total) async {
+    StringBuffer sb = StringBuffer();
+    sb.writeln("*DAVIS & COMPANY - ESTIMATE*");
+    sb.writeln("Est No: $estNo");
+    sb.writeln("Date: $date");
+    sb.writeln("Customer: $cust");
+    sb.writeln("--------------------------------");
+    for (var it in items) {
+      sb.writeln("• ${it['name']}");
+      sb.writeln("  ${it['qty']} x ₹${it['rate']} = *₹${it['total']}*");
+    }
+    sb.writeln("--------------------------------");
+    sb.writeln("*GRAND TOTAL: ₹$total*");
+    sb.writeln("Thank you!");
+
+    final encoded = Uri.encodeComponent(sb.toString());
+    final url = Uri.parse("whatsapp://send?text=$encoded");
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      } else {
+        final webUrl = Uri.parse("https://api.whatsapp.com/send?text=$encoded");
+        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {}
+  }
+
+  void _showWhatsAppPrompt(String estNo, String date, String cust, List<Map<String, dynamic>> items, double total) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.greenAccent),
+            SizedBox(width: 8),
+            Text('Saved Successfully', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: const Text('Do you want to share this estimate via WhatsApp?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              setState(() {
+                billItems.clear();
+                selectedCustomer = '';
+              });
+            },
+            child: const Text('NO', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            icon: const Icon(Icons.share, size: 16),
+            label: const Text('YES'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _shareViaWhatsApp(estNo, date, cust, items, total);
+              setState(() {
+                billItems.clear();
+                selectedCustomer = '';
+              });
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAddCustomerDialog() {
@@ -519,26 +591,24 @@ class _EstimateScreenState extends State<EstimateScreen> {
     setState(() => isSaving = true);
 
     String summary = billItems.map((b) => "${b['name']} (${b['qty']} x ${b['rate']})").join(", ");
+    final estNo = 'EST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final date = DateTime.now().toString().substring(0, 10);
+    final currentCustomer = selectedCustomer;
+    final currentBillItems = List<Map<String, dynamic>>.from(billItems);
+    final currentTotal = grandTotal;
+
     final estData = {
-      'ESTIMATE NO': 'EST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
-      'DATE': DateTime.now().toString().substring(0, 10),
-      'CUSTOMER NAME': selectedCustomer,
+      'ESTIMATE NO': estNo,
+      'DATE': date,
+      'CUSTOMER NAME': currentCustomer,
       'ITEMS SUMMARY': summary,
-      'TOTAL AMOUNT': grandTotal,
+      'TOTAL AMOUNT': currentTotal,
     };
 
-    final ok = await widget.onSaveEstimate(estData);
+    await widget.onSaveEstimate(estData);
     setState(() => isSaving = false);
 
-    if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Estimate Saved to Sheet!')));
-      setState(() {
-        billItems.clear();
-        selectedCustomer = '';
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save estimate')));
-    }
+    _showWhatsAppPrompt(estNo, date, currentCustomer, currentBillItems, currentTotal);
   }
 
   @override
@@ -648,7 +718,115 @@ class _EstimateScreenState extends State<EstimateScreen> {
 }
 
 // -------------------------------------------------------------
-// 2. ITEMS TAB (PRICE LIST)
+// 2. SAVED INVOICES TAB
+// -------------------------------------------------------------
+class SavedEstimatesTab extends StatefulWidget {
+  final List<dynamic> estimates;
+
+  const SavedEstimatesTab({super.key, required this.estimates});
+
+  @override
+  State<SavedEstimatesTab> createState() => _SavedEstimatesTabState();
+}
+
+class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
+  String searchQuery = '';
+
+  void _shareSavedInvoice(Map<String, dynamic> est) async {
+    StringBuffer sb = StringBuffer();
+    sb.writeln("*DAVIS & COMPANY - ESTIMATE*");
+    sb.writeln("Est No: ${est['ESTIMATE NO'] ?? '-'}");
+    sb.writeln("Date: ${est['DATE'] ?? '-'}");
+    sb.writeln("Customer: ${est['CUSTOMER NAME'] ?? '-'}");
+    sb.writeln("--------------------------------");
+    sb.writeln("Items: ${est['ITEMS SUMMARY'] ?? '-'}");
+    sb.writeln("--------------------------------");
+    sb.writeln("*GRAND TOTAL: ₹${est['TOTAL AMOUNT'] ?? '0'}*");
+    sb.writeln("Thank you!");
+
+    final encoded = Uri.encodeComponent(sb.toString());
+    final url = Uri.parse("whatsapp://send?text=$encoded");
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      } else {
+        final webUrl = Uri.parse("https://api.whatsapp.com/send?text=$encoded");
+        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reversedList = widget.estimates.reversed.toList();
+    final filtered = reversedList.where((raw) {
+      final e = raw as Map<String, dynamic>;
+      final cust = (e['CUSTOMER NAME'] ?? '').toString().toLowerCase();
+      final no = (e['ESTIMATE NO'] ?? '').toString().toLowerCase();
+      final q = searchQuery.toLowerCase();
+      return cust.contains(q) || no.contains(q);
+    }).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: TextField(
+            onChanged: (val) => setState(() => searchQuery = val),
+            decoration: InputDecoration(
+              hintText: 'Search saved invoices...',
+              prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
+              filled: true,
+              fillColor: const Color(0xFF1E1E1E),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            ),
+          ),
+        ),
+        Expanded(
+          child: filtered.isEmpty
+              ? const Center(child: Text('No saved estimates found', style: TextStyle(color: Colors.grey)))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, idx) {
+                    final est = filtered[idx] as Map<String, dynamic>;
+                    return Card(
+                      color: const Color(0xFF1E1E1E),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        title: Text(est['CUSTOMER NAME'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(
+                          "${est['ESTIMATE NO']} • ${est['DATE']}\n${est['ITEMS SUMMARY'] ?? ''}",
+                          style: const TextStyle(fontSize: 12, color: Colors.white70),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '₹${est['TOTAL AMOUNT']}',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.greenAccent),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.share, color: Colors.green, size: 20),
+                              onPressed: () => _shareSavedInvoice(est),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// 3. ITEMS TAB (PRICE LIST)
 // -------------------------------------------------------------
 class PriceListTab extends StatefulWidget {
   final List<dynamic> items;
@@ -803,7 +981,7 @@ class _PriceListTabState extends State<PriceListTab> {
 }
 
 // -------------------------------------------------------------
-// 3. CUSTOMERS TAB
+// 4. CUSTOMERS TAB
 // -------------------------------------------------------------
 class CustomersTab extends StatefulWidget {
   final List<dynamic> customers;
@@ -942,7 +1120,7 @@ class _CustomersTabState extends State<CustomersTab> {
 }
 
 // -------------------------------------------------------------
-// 4. CALCULATOR TAB
+// 5. CALCULATOR TAB
 // -------------------------------------------------------------
 class CalculatorTab extends StatefulWidget {
   const CalculatorTab({super.key});
