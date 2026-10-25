@@ -2250,7 +2250,7 @@ class _PriceListTabState extends State<PriceListTab> {
                     title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text('Tally: $tally\n$rateType', style: const TextStyle(fontSize: 12)),
                     trailing: Row(
-                      mainAxisSize: growthAxisSize.min,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text('₹$rate',
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
