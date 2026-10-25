@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 void main() {
   runApp(const DAndCoApp());
@@ -72,6 +71,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   String companyName = 'DAVIS & COMPANY';
   String companyLocation = 'Aluva, Ernakulam';
+  final String appVersion = '1.0.2';
 
   Map<String, dynamic>? invoiceToEdit;
 
@@ -129,9 +129,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const SnackBar(content: Text('Checking for updates...')),
     );
     try {
-      PackageInfo packageInfo = await PackageInfo.fromPlatform();
-      String currentVersion = packageInfo.version;
-
       final response = await http.get(Uri.parse(
           'https://api.github.com/repos/sudheeshpunnikrishnan-tech/d-and-co-app/releases/latest'));
 
@@ -140,14 +137,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         String latestTag = releaseData['tag_name'] ?? '';
         String cleanLatest = latestTag.replaceAll(RegExp(r'[^0-9.]'), '');
 
-        if (cleanLatest.isNotEmpty && cleanLatest != currentVersion) {
+        if (cleanLatest.isNotEmpty && cleanLatest != appVersion) {
           if (!mounted) return;
           showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
               title: const Text('Update Available! 🚀'),
               content: Text(
-                  'A newer version ($latestTag) is available.\nInstalled: v$currentVersion'),
+                  'A newer version ($latestTag) is available.\nCurrent: v$appVersion'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
@@ -172,7 +169,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('You are using the latest version (v$currentVersion)')),
+        SnackBar(content: Text('You are using the latest version (v$appVersion)')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -314,7 +311,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           children: [
             Icon(Icons.business, color: Colors.blueAccent),
             SizedBox(width: 8),
-            Text('DC PRIME v1.0.1'),
+            Text('DC PRIME v1.0.2'),
           ],
         ),
         content: const Column(
