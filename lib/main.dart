@@ -33,23 +33,31 @@ class _DAndCoAppState extends State<DAndCoApp> {
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
       theme: ThemeData.light().copyWith(
-        scaffoldBackgroundColor: const Color(0xFFF5F7FA),
-        primaryColor: Colors.blueAccent,
+        scaffoldBackgroundColor: const Color(0xFFF4F6F9),
+        primaryColor: const Color(0xFF1E88E5),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 1,
+          foregroundColor: Colors.black87,
+          elevation: 0.5,
         ),
-        cardColor: Colors.white,
+        cardTheme: CardTheme(
+          elevation: 1,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          color: Colors.white,
+        ),
       ),
       darkTheme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF121212),
-        primaryColor: Colors.blueAccent,
+        scaffoldBackgroundColor: const Color(0xFF0F1115),
+        primaryColor: const Color(0xFF2979FF),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1E1E1E),
+          backgroundColor: Color(0xFF171A21),
           elevation: 0,
         ),
-        cardColor: const Color(0xFF1E1E1E),
+        cardTheme: CardTheme(
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          color: const Color(0xFF1A1E26),
+        ),
       ),
       home: const MainNavigationScreen(),
     );
@@ -71,7 +79,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   String companyName = 'DAVIS & COMPANY';
   String companyLocation = 'Aluva, Ernakulam';
-  final String appVersion = '1.0.2';
+  final String appVersion = '1.0.3';
 
   Map<String, dynamic>? invoiceToEdit;
 
@@ -187,7 +195,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
@@ -204,7 +212,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.settings, color: Colors.blueAccent),
+                    Icon(Icons.tune, color: Color(0xFF2979FF)),
                     SizedBox(width: 8),
                     Text('Settings & Preferences',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -212,8 +220,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text('Appearance',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                const SizedBox(height: 8),
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
+                const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -243,9 +251,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     ),
                   ],
                 ),
-                const Divider(height: 30),
+                const Divider(height: 32),
                 const Text('Company Details',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
                 TextField(
                   controller: compController,
                   decoration: const InputDecoration(labelText: 'Company Name'),
@@ -254,7 +262,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   controller: locController,
                   decoration: const InputDecoration(labelText: 'Location / City'),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerRight,
                   child: ElevatedButton(
@@ -272,13 +280,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     child: const Text('Save Details'),
                   ),
                 ),
-                const Divider(height: 30),
+                const Divider(height: 32),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.system_update, color: Colors.greenAccent),
                   title: const Text('Check for Updates'),
                   subtitle: const Text('Verify new releases on GitHub'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 14),
                   onTap: () {
                     Navigator.pop(ctx);
                     _checkForUpdates();
@@ -288,8 +296,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.info_outline, color: Colors.amberAccent),
                   title: const Text('About DC PRIME'),
-                  subtitle: const Text('App version, developer & contact info'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  subtitle: const Text('App info & contact support'),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 14),
                   onTap: () {
                     Navigator.pop(ctx);
                     _showAboutDialog();
@@ -307,11 +315,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.business, color: Colors.blueAccent),
-            SizedBox(width: 8),
-            Text('DC PRIME v1.0.2'),
+            const Icon(Icons.business, color: Color(0xFF2979FF)),
+            const SizedBox(width: 8),
+            Text('DC PRIME v$appVersion'),
           ],
         ),
         content: const Column(
@@ -419,11 +427,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(companyName,
-            style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1, fontSize: 18)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(companyName,
+                style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1.0, fontSize: 17)),
+            Text(companyLocation,
+                style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          ],
+        ),
         actions: [
-          IconButton(icon: const Icon(Icons.settings), onPressed: _openSettingsDialog),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: fetchData),
+          IconButton(icon: const Icon(Icons.tune_outlined), onPressed: _openSettingsDialog),
+          IconButton(icon: const Icon(Icons.sync), onPressed: fetchData),
         ],
       ),
       body: _isLoading
@@ -436,18 +451,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   ),
                 )
               : screens[_currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        selectedItemColor: Colors.blueAccent,
-        unselectedItemColor: Colors.grey,
-        type: BottomNavigationBarType.fixed,
-        onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Estimate'),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Invoices'),
-          BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Price List'),
-          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Customers'),
-          BottomNavigationBarItem(icon: Icon(Icons.calculate), label: 'Calculator'),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Estimate'),
+          NavigationDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history), label: 'Invoices'),
+          NavigationDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: 'Price List'),
+          NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Customers'),
+          NavigationDestination(icon: Icon(Icons.calculate_outlined), selectedIcon: Icon(Icons.calculate), label: 'Calculator'),
         ],
       ),
     );
@@ -556,18 +568,18 @@ class _EstimateScreenState extends State<EstimateScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Edit: ${item['name']}', style: const TextStyle(fontSize: 16, color: Colors.blueAccent)),
+        title: Text('Edit: ${item['name']}', style: const TextStyle(fontSize: 16, color: Color(0xFF2979FF))),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: qtyController,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'Quantity / Bags / KG'),
             ),
             TextField(
               controller: rateController,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'Rate (₹)'),
             ),
           ],
@@ -654,7 +666,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
             child: const Text('NO', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white),
             icon: const Icon(Icons.share, size: 16),
             label: const Text('YES'),
             onPressed: () {
@@ -732,7 +744,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Item Name *')),
-              TextField(controller: rateCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Rate (₹) *')),
+              TextField(controller: rateCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Rate (₹) *')),
               TextField(controller: tallyCtrl, decoration: const InputDecoration(labelText: 'Name on Tally')),
               TextField(controller: rateTypeCtrl, decoration: const InputDecoration(labelText: 'Rate Per (KG / BAG)')),
             ],
@@ -765,7 +777,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
         String filter = '';
         return StatefulBuilder(
@@ -785,8 +797,8 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     children: [
                       const Text('Select Customer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       TextButton.icon(
-                        icon: const Icon(Icons.person_add, color: Colors.blueAccent),
-                        label: const Text('New', style: TextStyle(color: Colors.blueAccent)),
+                        icon: const Icon(Icons.person_add, color: Color(0xFF2979FF)),
+                        label: const Text('New Customer', style: TextStyle(color: Color(0xFF2979FF))),
                         onPressed: () {
                           Navigator.pop(ctx);
                           _showAddCustomerDialog();
@@ -794,16 +806,18 @@ class _EstimateScreenState extends State<EstimateScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
                   TextField(
                     onChanged: (val) => setModalState(() => filter = val),
                     decoration: InputDecoration(
                       hintText: 'Search customer name...',
                       prefixIcon: const Icon(Icons.search),
                       filled: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Expanded(
                     child: ListView.builder(
                       itemCount: filteredCusts.length,
@@ -812,7 +826,8 @@ class _EstimateScreenState extends State<EstimateScreen> {
                         final name = c['NAME'] ?? '';
                         final b2b = c['B2B'] ?? '';
                         return ListTile(
-                          title: Text(name.toString()),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
                           subtitle: b2b.toString().isNotEmpty ? Text(b2b.toString(), style: const TextStyle(color: Colors.grey, fontSize: 12)) : null,
                           onTap: () {
                             setState(() => selectedCustomer = name.toString());
@@ -835,7 +850,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
         String filter = '';
         return StatefulBuilder(
@@ -855,8 +870,8 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     children: [
                       const Text('Add Item to Bill', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       TextButton.icon(
-                        icon: const Icon(Icons.add_box, color: Colors.blueAccent),
-                        label: const Text('New Item', style: TextStyle(color: Colors.blueAccent)),
+                        icon: const Icon(Icons.add_circle_outline, color: Color(0xFF2979FF)),
+                        label: const Text('New Item', style: TextStyle(color: Color(0xFF2979FF))),
                         onPressed: () {
                           Navigator.pop(ctx);
                           _showAddItemDialog();
@@ -864,16 +879,18 @@ class _EstimateScreenState extends State<EstimateScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
                   TextField(
                     onChanged: (val) => setModalState(() => filter = val),
                     decoration: InputDecoration(
                       hintText: 'Search items...',
                       prefixIcon: const Icon(Icons.search),
                       filled: true,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Expanded(
                     child: ListView.builder(
                       itemCount: filteredItems.length,
@@ -884,8 +901,9 @@ class _EstimateScreenState extends State<EstimateScreen> {
                         final unit = item['RATE PER KG/BAG'] ?? '';
 
                         return ListTile(
-                          title: Text(name.toString()),
-                          trailing: Text('₹$rate', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
+                          trailing: Text('₹$rate', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF), fontSize: 15)),
                           subtitle: Text(unit.toString(), style: const TextStyle(fontSize: 12, color: Colors.grey)),
                           onTap: () {
                             Navigator.pop(ctx);
@@ -911,18 +929,19 @@ class _EstimateScreenState extends State<EstimateScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(item['ITEM NAME'] ?? 'Quantity', style: const TextStyle(fontSize: 16)),
+        title: Text(item['ITEM NAME'] ?? 'Quantity', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: qtyController,
-              keyboardType: TextInputType.number,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'Quantity / Bags / KG'),
             ),
             TextField(
               controller: rateController,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'Rate (₹)'),
             ),
           ],
@@ -944,7 +963,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
               });
               Navigator.pop(ctx);
             },
-            child: const Text('Add'),
+            child: const Text('Add to Bill'),
           ),
         ],
       ),
@@ -953,7 +972,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
 
   void _saveEstimate() async {
     if (selectedCustomer.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a customer')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a customer first')));
       return;
     }
     if (billItems.isEmpty) {
@@ -965,7 +984,10 @@ class _EstimateScreenState extends State<EstimateScreen> {
 
     String summary = billItems.map((b) => "${b['name']} (${b['qty']} x ${b['rate']})").join(", ");
     final estNo = currentEditingEstNo ?? 'EST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-    final date = DateTime.now().toIso8601String().substring(0, 10);
+
+    final now = DateTime.now();
+    final date = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
     final currentCustomer = selectedCustomer;
     final currentBillItems = List<Map<String, dynamic>>.from(billItems);
     final currentTotal = grandTotal;
@@ -986,17 +1008,25 @@ class _EstimateScreenState extends State<EstimateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Column(
       children: [
         if (currentEditingEstNo != null)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.amber.shade900.withOpacity(0.3),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: Colors.amber.shade900.withOpacity(0.25),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Editing Invoice: $currentEditingEstNo',
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                Row(
+                  children: [
+                    const Icon(Icons.edit_note, color: Colors.amberAccent, size: 20),
+                    const SizedBox(width: 8),
+                    Text('Editing: $currentEditingEstNo',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                  ],
+                ),
                 IconButton(
                   icon: const Icon(Icons.close, size: 18, color: Colors.amberAccent),
                   onPressed: () => setState(() {
@@ -1009,41 +1039,61 @@ class _EstimateScreenState extends State<EstimateScreen> {
             ),
           ),
         Container(
+          margin: const EdgeInsets.fromLTRB(12, 12, 12, 6),
           padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardTheme.color,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
           child: Row(
             children: [
               Expanded(
                 child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
                   onTap: _openCustomerPicker,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                      color: isDark ? const Color(0xFF242A36) : const Color(0xFFEDF2F7),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          selectedCustomer.isEmpty ? 'Select Customer *' : selectedCustomer,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: selectedCustomer.isEmpty ? Colors.grey : Colors.blueAccent,
+                        Flexible(
+                          child: Text(
+                            selectedCustomer.isEmpty ? 'Select Customer *' : selectedCustomer,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: selectedCustomer.isEmpty ? Colors.grey : const Color(0xFF2979FF),
+                            ),
                           ),
                         ),
-                        const Icon(Icons.arrow_drop_down, color: Colors.blueAccent),
+                        const Icon(Icons.keyboard_arrow_down, color: Color(0xFF2979FF)),
                       ],
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               ElevatedButton.icon(
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Item'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2979FF),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
                 onPressed: _openItemPicker,
               ),
             ],
@@ -1051,27 +1101,55 @@ class _EstimateScreenState extends State<EstimateScreen> {
         ),
         Expanded(
           child: billItems.isEmpty
-              ? const Center(child: Text('No items in bill yet. Tap + Item to add.', style: TextStyle(color: Colors.grey)))
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.receipt_outlined, size: 54, color: Colors.grey.withOpacity(0.4)),
+                      const SizedBox(height: 10),
+                      const Text('Bill is empty', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey)),
+                      const SizedBox(height: 4),
+                      const Text('Choose customer and tap + Item to begin', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
+                )
               : ListView.builder(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   itemCount: billItems.length,
                   itemBuilder: (context, idx) {
                     final item = billItems[idx];
-                    return Card(
+                    return Container(
                       margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardTheme.color,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04),
+                        ),
+                      ),
                       child: ListTile(
-                        title: Text(item['name'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('${item['qty']} x ₹${item['rate']} = ₹${item['total']}'),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        title: Text(item['name'].toString(),
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                        subtitle: Text(
+                          '${item['qty']} × ₹${item['rate']}',
+                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            Text(
+                              '₹${item['total']}',
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.greenAccent),
+                            ),
+                            const SizedBox(width: 6),
                             IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.orangeAccent, size: 20),
+                              icon: const Icon(Icons.edit_outlined, color: Colors.orangeAccent, size: 20),
                               tooltip: 'Edit Qty / Rate',
                               onPressed: () => _editBillItem(idx),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                              icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
                               onPressed: () => setState(() => billItems.removeAt(idx)),
                             ),
                           ],
@@ -1082,27 +1160,41 @@ class _EstimateScreenState extends State<EstimateScreen> {
                 ),
         ),
         Container(
-          padding: const EdgeInsets.all(16),
-          color: Theme.of(context).cardColor,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardTheme.color,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 12,
+                offset: const Offset(0, -3),
+              ),
+            ],
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Grand Total', style: TextStyle(color: Colors.grey, fontSize: 13)),
-                  Text('₹${grandTotal.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                  const Text('Grand Total', style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500)),
+                  Text(
+                    '₹${grandTotal.toStringAsFixed(2)}',
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.greenAccent),
+                  ),
                 ],
               ),
               ElevatedButton.icon(
                 icon: isSaving
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.check_circle),
-                label: Text(currentEditingEstNo != null ? 'Update & Save' : 'Save Estimate'),
+                    : const Icon(Icons.check_circle_outline),
+                label: Text(currentEditingEstNo != null ? 'Update Bill' : 'Save & Share'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  backgroundColor: const Color(0xFF2E7D32),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 onPressed: isSaving ? null : _saveEstimate,
               ),
@@ -1141,14 +1233,14 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
     if (rawDate == null) return '-';
     String s = rawDate.toString().trim();
     if (s.contains('T')) {
-      s = s.split('T').first;
+      try {
+        DateTime dt = DateTime.parse(s).toLocal();
+        return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+      } catch (_) {
+        s = s.split('T').first;
+      }
     }
-    try {
-      DateTime dt = DateTime.parse(s);
-      return "${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
-    } catch (_) {
-      return s;
-    }
+    return s;
   }
 
   List<Map<String, dynamic>> _parseSummary(String summary) {
@@ -1227,9 +1319,9 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
       context: context,
       builder: (ctx) => Dialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         child: Padding(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1238,15 +1330,15 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                 child: Column(
                   children: [
                     Text(widget.companyName,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
                     Text(widget.companyLocation, style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     const SizedBox(height: 6),
                     const Text('ESTIMATE INVOICE',
-                        style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                        style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1)),
                   ],
                 ),
               ),
-              const Divider(height: 20),
+              const Divider(height: 22),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1257,9 +1349,9 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
               const SizedBox(height: 6),
               Text('Customer: ${est['CUSTOMER NAME'] ?? '-'}',
                   style: const TextStyle(color: Colors.amberAccent, fontSize: 15, fontWeight: FontWeight.bold)),
-              const Divider(height: 20),
-              const Text('Items List:',
-                  style: TextStyle(fontSize: 13, color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+              const Divider(height: 22),
+              const Text('Items Breakdown:',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF2979FF), fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Flexible(
                 child: ListView.separated(
@@ -1277,7 +1369,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(item['name'].toString(),
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
                               if (item['qty'].toString().isNotEmpty)
                                 Text('${item['qty']} × ₹${item['rate']}',
                                     style: const TextStyle(color: Colors.grey, fontSize: 11)),
@@ -1292,7 +1384,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   },
                 ),
               ),
-              const Divider(height: 20),
+              const Divider(height: 22),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1301,7 +1393,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 20),
               Row(
                 children: [
                   Expanded(
@@ -1314,10 +1406,10 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                       },
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white),
                       icon: const Icon(Icons.share, size: 16),
                       label: const Text('WhatsApp'),
                       onPressed: () {
@@ -1339,22 +1431,22 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
     if (selectedFilter == 'All Invoices') return true;
     final now = DateTime.now();
     final todayStr =
-        "${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
 
     if (selectedFilter == 'Today') {
       return formattedDate == todayStr;
     } else if (selectedFilter == 'Yesterday') {
       final yest = now.subtract(const Duration(days: 1));
       final yestStr =
-          "${yest.year.toString().padLeft(4, '0')}-${yest.month.toString().padLeft(2, '0')}-${yest.day.toString().padLeft(2, '0')}";
+          "${yest.year}-${yest.month.toString().padLeft(2, '0')}-${yest.day.toString().padLeft(2, '0')}";
       return formattedDate == yestStr;
     } else if (selectedFilter == 'This Month') {
       final monthPrefix =
-          "${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}";
+          "${now.year}-${now.month.toString().padLeft(2, '0')}";
       return formattedDate.startsWith(monthPrefix);
     } else if (selectedFilter == 'Custom' && customDate != null) {
       final cStr =
-          "${customDate!.year.toString().padLeft(4, '0')}-${customDate!.month.toString().padLeft(2, '0')}-${customDate!.day.toString().padLeft(2, '0')}";
+          "${customDate!.year}-${customDate!.month.toString().padLeft(2, '0')}-${customDate!.day.toString().padLeft(2, '0')}";
       return formattedDate == cStr;
     }
     return true;
@@ -1384,7 +1476,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
             onChanged: (val) => setState(() => searchQuery = val),
             decoration: InputDecoration(
               hintText: 'Search customer or invoice no...',
-              prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF2979FF)),
               filled: true,
               contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -1448,7 +1540,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
               ? Center(
                   child: Text(
                     selectedFilter == 'Today'
-                        ? 'No invoices generated today.\nSelect "All Invoices" to see older records.'
+                        ? 'No invoices recorded today.\nSelect "All Invoices" to browse history.'
                         : 'No saved estimates found for this filter.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.grey),
@@ -1466,7 +1558,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                         title: Text(est['CUSTOMER NAME'] ?? 'Unknown',
                             style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text(
-                          "${est['ESTIMATE NO']} • ${_cleanDate(est['DATE'])}\nTap to preview all items",
+                          "${est['ESTIMATE NO']} • ${_cleanDate(est['DATE'])}\nTap to preview items",
                           style: const TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                         trailing: Row(
@@ -1539,7 +1631,7 @@ class _PriceListTabState extends State<PriceListTab> {
               ),
               TextField(
                 controller: rateCtrl,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(labelText: 'Rate (₹) *'),
               ),
               TextField(
@@ -1593,7 +1685,7 @@ class _PriceListTabState extends State<PriceListTab> {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.blueAccent,
+        backgroundColor: const Color(0xFF2979FF),
         onPressed: () => _showItemDialog(),
         child: const Icon(Icons.add),
       ),
@@ -1605,7 +1697,7 @@ class _PriceListTabState extends State<PriceListTab> {
               onChanged: (val) => setState(() => searchQuery = val),
               decoration: InputDecoration(
                 hintText: 'Search items or tally names...',
-                prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
+                prefixIcon: const Icon(Icons.search, color: Color(0xFF2979FF)),
                 filled: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -1633,7 +1725,7 @@ class _PriceListTabState extends State<PriceListTab> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text('₹$rate',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
                         IconButton(
                           icon: const Icon(Icons.edit, size: 18, color: Colors.grey),
                           onPressed: () => _showItemDialog(item),
@@ -1733,7 +1825,7 @@ class _CustomersTabState extends State<CustomersTab> {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.blueAccent,
+        backgroundColor: const Color(0xFF2979FF),
         onPressed: () => _showCustomerDialog(),
         child: const Icon(Icons.person_add),
       ),
@@ -1745,7 +1837,7 @@ class _CustomersTabState extends State<CustomersTab> {
               onChanged: (val) => setState(() => searchQuery = val),
               decoration: InputDecoration(
                 hintText: 'Search customers...',
-                prefixIcon: const Icon(Icons.search, color: Colors.blueAccent),
+                prefixIcon: const Icon(Icons.search, color: Color(0xFF2979FF)),
                 filled: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -1798,31 +1890,53 @@ class CalculatorTab extends StatefulWidget {
 }
 
 class _CalculatorTabState extends State<CalculatorTab> {
+  String expression = '';
   String display = '0';
-  double firstOperand = 0;
-  String operator = '';
+  double? firstOperand;
+  String? operator;
   bool shouldResetDisplay = false;
 
   void onBtnClick(String text) {
     setState(() {
       if (text == 'C') {
+        expression = '';
         display = '0';
-        firstOperand = 0;
-        operator = '';
+        firstOperand = null;
+        operator = null;
+        shouldResetDisplay = false;
+      } else if (text == '⌫') {
+        if (display.length > 1) {
+          display = display.substring(0, display.length - 1);
+        } else {
+          display = '0';
+        }
       } else if (text == '+' || text == '-' || text == '×' || text == '÷') {
         firstOperand = double.tryParse(display) ?? 0;
         operator = text;
+        expression = '$display $operator';
         shouldResetDisplay = true;
       } else if (text == '=') {
-        double secondOperand = double.tryParse(display) ?? 0;
-        double res = 0;
-        if (operator == '+') res = firstOperand + secondOperand;
-        if (operator == '-') res = firstOperand - secondOperand;
-        if (operator == '×') res = firstOperand * secondOperand;
-        if (operator == '÷') res = secondOperand != 0 ? firstOperand / secondOperand : 0;
+        if (firstOperand != null && operator != null) {
+          double secondOperand = double.tryParse(display) ?? 0;
+          double res = 0;
+          if (operator == '+') res = firstOperand! + secondOperand;
+          if (operator == '-') res = firstOperand! - secondOperand;
+          if (operator == '×') res = firstOperand! * secondOperand;
+          if (operator == '÷') res = secondOperand != 0 ? firstOperand! / secondOperand : 0;
 
-        display = res.toString().endsWith('.0') ? res.toInt().toString() : res.toString();
-        operator = '';
+          expression = '$firstOperand $operator $secondOperand =';
+          display = res.toString().endsWith('.0') ? res.toInt().toString() : res.toString();
+          firstOperand = null;
+          operator = null;
+          shouldResetDisplay = true;
+        }
+      } else if (text == '.') {
+        if (shouldResetDisplay) {
+          display = '0.';
+          shouldResetDisplay = false;
+        } else if (!display.contains('.')) {
+          display += '.';
+        }
       } else {
         if (display == '0' || shouldResetDisplay) {
           display = text;
@@ -1837,13 +1951,14 @@ class _CalculatorTabState extends State<CalculatorTab> {
   Widget calcBtn(String text, {Color? bg, Color? fg}) {
     return Expanded(
       child: Padding(
-        padding: const EdgeInsets.all(6.0),
+        padding: const EdgeInsets.all(5.0),
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: bg,
             foregroundColor: fg ?? Colors.white,
-            padding: const EdgeInsets.all(22),
+            padding: const EdgeInsets.symmetric(vertical: 20),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 0,
           ),
           onPressed: () => onBtnClick(text),
           child: Text(text, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
@@ -1855,7 +1970,7 @@ class _CalculatorTabState extends State<CalculatorTab> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final numBtnColor = isDark ? const Color(0xFF2A2A2A) : Colors.grey.shade300;
+    final numBtnColor = isDark ? const Color(0xFF1E232D) : const Color(0xFFE2E8F0);
     final numTextColor = isDark ? Colors.white : Colors.black87;
 
     return Column(
@@ -1864,39 +1979,65 @@ class _CalculatorTabState extends State<CalculatorTab> {
           child: Container(
             alignment: Alignment.bottomRight,
             padding: const EdgeInsets.all(24),
-            child: Text(display,
-                style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  expression,
+                  style: const TextStyle(fontSize: 20, color: Colors.grey, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 6),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    display,
+                    style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: Color(0xFF2979FF)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        Column(
-          children: [
-            Row(children: [
-              calcBtn('C', bg: Colors.redAccent),
-              calcBtn('÷', bg: Colors.orangeAccent),
-              calcBtn('×', bg: Colors.orangeAccent),
-              calcBtn('-', bg: Colors.orangeAccent)
-            ]),
-            Row(children: [
-              calcBtn('7', bg: numBtnColor, fg: numTextColor),
-              calcBtn('8', bg: numBtnColor, fg: numTextColor),
-              calcBtn('9', bg: numBtnColor, fg: numTextColor),
-              calcBtn('+', bg: Colors.orangeAccent)
-            ]),
-            Row(children: [
-              calcBtn('4', bg: numBtnColor, fg: numTextColor),
-              calcBtn('5', bg: numBtnColor, fg: numTextColor),
-              calcBtn('6', bg: numBtnColor, fg: numTextColor),
-              calcBtn('0', bg: numBtnColor, fg: numTextColor)
-            ]),
-            Row(children: [
-              calcBtn('1', bg: numBtnColor, fg: numTextColor),
-              calcBtn('2', bg: numBtnColor, fg: numTextColor),
-              calcBtn('3', bg: numBtnColor, fg: numTextColor),
-              calcBtn('=', bg: Colors.green)
-            ]),
-          ],
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardTheme.color,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              Row(children: [
+                calcBtn('C', bg: Colors.redAccent.withOpacity(0.85)),
+                calcBtn('⌫', bg: Colors.blueGrey.withOpacity(0.5)),
+                calcBtn('÷', bg: Colors.orangeAccent),
+                calcBtn('×', bg: Colors.orangeAccent),
+              ]),
+              Row(children: [
+                calcBtn('7', bg: numBtnColor, fg: numTextColor),
+                calcBtn('8', bg: numBtnColor, fg: numTextColor),
+                calcBtn('9', bg: numBtnColor, fg: numTextColor),
+                calcBtn('-', bg: Colors.orangeAccent),
+              ]),
+              Row(children: [
+                calcBtn('4', bg: numBtnColor, fg: numTextColor),
+                calcBtn('5', bg: numBtnColor, fg: numTextColor),
+                calcBtn('6', bg: numBtnColor, fg: numTextColor),
+                calcBtn('+', bg: Colors.orangeAccent),
+              ]),
+              Row(children: [
+                calcBtn('1', bg: numBtnColor, fg: numTextColor),
+                calcBtn('2', bg: numBtnColor, fg: numTextColor),
+                calcBtn('3', bg: numBtnColor, fg: numTextColor),
+                calcBtn('=', bg: const Color(0xFF2E7D32)),
+              ]),
+              Row(children: [
+                calcBtn('0', bg: numBtnColor, fg: numTextColor),
+                calcBtn('.', bg: numBtnColor, fg: numTextColor),
+              ]),
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
       ],
     );
   }
