@@ -285,7 +285,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       builder: (ctx) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.edit_business, color: Color(0xFF2979FF)),
+            Icon(Icons.business, color: Color(0xFF2979FF)),
             SizedBox(width: 8),
             Text('Edit Company Details', style: TextStyle(fontSize: 18)),
           ],
@@ -2250,7 +2250,7 @@ class _PriceListTabState extends State<PriceListTab> {
                     title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text('Tally: $tally\n$rateType', style: const TextStyle(fontSize: 12)),
                     trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisSize: growthAxisSize.min,
                       children: [
                         Text('₹$rate',
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
