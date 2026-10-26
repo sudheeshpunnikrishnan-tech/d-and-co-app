@@ -223,7 +223,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   String companyName = 'DAVIS & COMPANY';
   String companyLocation = 'ALUVA, ERNAKULAM';
-  final String appVersion = '1.0.4';
+  final String appVersion = '1.0.5';
+
+  bool showSaveConfirmation = true;
 
   Map<String, dynamic>? invoiceToEdit;
 
@@ -393,6 +395,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   ],
                 ),
                 const Divider(height: 32),
+                const Text('Billing Preferences',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Save Confirmation Dialog'),
+                  subtitle: const Text('Show options popup when invoice is saved'),
+                  value: showSaveConfirmation,
+                  activeColor: const Color(0xFF2979FF),
+                  onChanged: (val) {
+                    setState(() => showSaveConfirmation = val);
+                    setModalState(() {});
+                  },
+                ),
+                const Divider(height: 32),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.person_pin, color: Colors.amberAccent),
@@ -495,6 +511,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         invoiceToEdit: invoiceToEdit,
         companyName: companyName,
         companyLocation: companyLocation,
+        showSaveConfirmation: showSaveConfirmation,
         onClearEdit: () => setState(() => invoiceToEdit = null),
         onSaveEstimate: (estData) async => await sendSheetRequest({
           'action': 'add',
@@ -636,6 +653,7 @@ class EstimateScreen extends StatefulWidget {
   final Map<String, dynamic>? invoiceToEdit;
   final String companyName;
   final String companyLocation;
+  final bool showSaveConfirmation;
   final VoidCallback onClearEdit;
   final Future<bool> Function(Map<String, dynamic>) onSaveEstimate;
   final Future<bool> Function(Map<String, dynamic>) onAddCustomer;
@@ -649,6 +667,7 @@ class EstimateScreen extends StatefulWidget {
     required this.invoiceToEdit,
     required this.companyName,
     required this.companyLocation,
+    required this.showSaveConfirmation,
     required this.onClearEdit,
     required this.onSaveEstimate,
     required this.onAddCustomer,
@@ -967,56 +986,86 @@ class _EstimateScreenState extends State<EstimateScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.greenAccent),
-            SizedBox(width: 8),
-            Text('Saved Successfully', style: TextStyle(fontSize: 16)),
-          ],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Center(
+          child: Column(
+            children: [
+              Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 48),
+              SizedBox(height: 8),
+              Text('Invoice Saved!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
         ),
-        content: const Text('Invoice saved! Choose an option below:'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              setState(() {
-                billItems.clear();
-                selectedCustomer = '';
-                currentEditingEstNo = null;
-              });
-            },
-            child: const Text('Done', style: TextStyle(color: Colors.grey)),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // Done Button
+              InkWell(
+                borderRadius: BorderRadius.circular(50),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  setState(() {
+                    billItems.clear();
+                    selectedCustomer = '';
+                    currentEditingEstNo = null;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.check, color: Colors.greenAccent, size: 28),
+                ),
+              ),
+              // PDF Button
+              InkWell(
+                borderRadius: BorderRadius.circular(50),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _generatePdfInvoice(estNo, date, cust, items, total);
+                  setState(() {
+                    billItems.clear();
+                    selectedCustomer = '';
+                    currentEditingEstNo = null;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 28),
+                ),
+              ),
+              // WhatsApp Button
+              InkWell(
+                borderRadius: BorderRadius.circular(50),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _shareViaWhatsApp(estNo, date, cust, items, total);
+                  setState(() {
+                    billItems.clear();
+                    selectedCustomer = '';
+                    currentEditingEstNo = null;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF25D366),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.share, color: Colors.white, size: 28),
+                ),
+              ),
+            ],
           ),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 16),
-            label: const Text('PDF / Print', style: TextStyle(color: Colors.redAccent)),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _generatePdfInvoice(estNo, date, cust, items, total);
-              setState(() {
-                billItems.clear();
-                selectedCustomer = '';
-                currentEditingEstNo = null;
-              });
-            },
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF25D366),
-                foregroundColor: Colors.white),
-            icon: const Icon(Icons.share, size: 16),
-            label: const Text('WhatsApp'),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _shareViaWhatsApp(estNo, date, cust, items, total);
-              setState(() {
-                billItems.clear();
-                selectedCustomer = '';
-                currentEditingEstNo = null;
-              });
-            },
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1383,7 +1432,18 @@ class _EstimateScreenState extends State<EstimateScreen> {
     await widget.onSaveEstimate(estData);
     setState(() => isSaving = false);
 
-    _showSavedOptions(estNo, date, currentCustomer, currentBillItems, currentTotal);
+    if (widget.showSaveConfirmation) {
+      _showSavedOptions(estNo, date, currentCustomer, currentBillItems, currentTotal);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invoice $estNo Saved Successfully!')),
+      );
+      setState(() {
+        billItems.clear();
+        selectedCustomer = '';
+        currentEditingEstNo = null;
+      });
+    }
   }
 
   @override
@@ -1607,7 +1667,7 @@ class SavedEstimatesTab extends StatefulWidget {
 class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
   String searchQuery = '';
   String selectedFilter = 'Today';
-  DateTime? customDate;
+  DateTimeRange? selectedDateRange;
 
   String _cleanDate(dynamic rawDate) {
     if (rawDate == null) return '-';
@@ -1974,10 +2034,16 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
       final monthPrefix =
           "${now.year}-${now.month.toString().padLeft(2, '0')}";
       return formattedDate.startsWith(monthPrefix);
-    } else if (selectedFilter == 'Custom' && customDate != null) {
-      final cStr =
-          "${customDate!.year}-${customDate!.month.toString().padLeft(2, '0')}-${customDate!.day.toString().padLeft(2, '0')}";
-      return formattedDate == cStr;
+    } else if (selectedFilter == 'Date Range' && selectedDateRange != null) {
+      try {
+        DateTime recordDate = DateTime.parse(formattedDate);
+        DateTime startDate = DateTime(selectedDateRange!.start.year, selectedDateRange!.start.month, selectedDateRange!.start.day);
+        DateTime endDate = DateTime(selectedDateRange!.end.year, selectedDateRange!.end.month, selectedDateRange!.end.day, 23, 59, 59);
+        return recordDate.isAfter(startDate.subtract(const Duration(seconds: 1))) &&
+               recordDate.isBefore(endDate.add(const Duration(seconds: 1)));
+      } catch (_) {
+        return false;
+      }
     }
     return true;
   }
@@ -2045,21 +2111,25 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
               ),
               const SizedBox(width: 8),
               ActionChip(
-                avatar: const Icon(Icons.calendar_today, size: 14),
-                label: Text(customDate != null
-                    ? "${customDate!.day}/${customDate!.month}"
-                    : 'Pick Date'),
+                avatar: const Icon(Icons.date_range, size: 14),
+                label: Text(selectedDateRange != null
+                    ? "${selectedDateRange!.start.day}/${selectedDateRange!.start.month} - ${selectedDateRange!.end.day}/${selectedDateRange!.end.month}"
+                    : 'Date Range'),
                 onPressed: () async {
-                  final picked = await showDatePicker(
+                  final picked = await showDateRangePicker(
                     context: context,
-                    initialDate: DateTime.now(),
                     firstDate: DateTime(2023),
                     lastDate: DateTime(2030),
+                    initialDateRange: selectedDateRange ??
+                        DateTimeRange(
+                          start: DateTime.now().subtract(const Duration(days: 7)),
+                          end: DateTime.now(),
+                        ),
                   );
                   if (picked != null) {
                     setState(() {
-                      customDate = picked;
-                      selectedFilter = 'Custom';
+                      selectedDateRange = picked;
+                      selectedFilter = 'Date Range';
                     });
                   }
                 },
