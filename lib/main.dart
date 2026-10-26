@@ -293,7 +293,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ],
         ),
         content: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: dynamicSizeColumn(context),
           children: [
             TextField(
               controller: compController,
@@ -332,6 +332,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ),
     );
   }
+
+  MainAxisSize dynamicSizeColumn(BuildContext context) => MainAxisSize.min;
 
   void _openSettingsDialog() {
     showModalBottomSheet(
