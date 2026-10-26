@@ -491,6 +491,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       EstimateScreen(
         items: itemsList,
         customers: customersList,
+        estimates: estimatesList,
         invoiceToEdit: invoiceToEdit,
         companyName: companyName,
         companyLocation: companyLocation,
@@ -631,6 +632,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 class EstimateScreen extends StatefulWidget {
   final List<dynamic> items;
   final List<dynamic> customers;
+  final List<dynamic> estimates;
   final Map<String, dynamic>? invoiceToEdit;
   final String companyName;
   final String companyLocation;
@@ -643,6 +645,7 @@ class EstimateScreen extends StatefulWidget {
     super.key,
     required this.items,
     required this.customers,
+    required this.estimates,
     required this.invoiceToEdit,
     required this.companyName,
     required this.companyLocation,
@@ -712,6 +715,24 @@ class _EstimateScreenState extends State<EstimateScreen> {
       }
       widget.onClearEdit();
     }
+  }
+
+  String _getNextEstimateNumber() {
+    int maxNumber = 0;
+    for (var est in widget.estimates) {
+      if (est is Map<String, dynamic>) {
+        String estNo = (est['ESTIMATE NO'] ?? '').toString();
+        final match = RegExp(r'(\d+)').allMatches(estNo);
+        if (match.isNotEmpty) {
+          int? parsed = int.tryParse(match.last.group(0)!);
+          if (parsed != null && parsed > maxNumber && parsed < 100000) {
+            maxNumber = parsed;
+          }
+        }
+      }
+    }
+    int next = maxNumber + 1;
+    return 'EST-${next.toString().padLeft(4, '0')}';
   }
 
   double get grandTotal {
@@ -1342,7 +1363,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
     setState(() => isSaving = true);
 
     String summary = billItems.map((b) => "${b['name']} (${b['qty']} x ${b['rate']})").join(", ");
-    final estNo = currentEditingEstNo ?? 'EST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final estNo = currentEditingEstNo ?? _getNextEstimateNumber();
 
     final now = DateTime.now();
     final date = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
