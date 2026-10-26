@@ -223,9 +223,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   String companyName = 'DAVIS & COMPANY';
   String companyLocation = 'ALUVA, ERNAKULAM';
-  final String appVersion = '1.0.6';
+  final String appVersion = '1.0.7';
 
   bool askSaveConfirmation = true;
+  bool enableLabourCharge = true;
+  double defaultLabourPerBag = 3.0;
+  bool showUpiQr = true;
+  String upiId = 'davisandco@upi';
 
   Map<String, dynamic>? invoiceToEdit;
 
@@ -334,6 +338,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   void _openSettingsDialog() {
+    final upiCtrl = TextEditingController(text: upiId);
+    final labourCtrl = TextEditingController(text: defaultLabourPerBag.toString());
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -394,13 +401,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     ),
                   ],
                 ),
-                const Divider(height: 32),
-                const Text('Billing Security',
+                const Divider(height: 28),
+                const Text('Billing Controls',
                     style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Confirm Before Save'),
-                  subtitle: const Text('Ask confirmation dialog before saving invoice'),
+                  subtitle: const Text('Prompt alert before recording bill'),
                   value: askSaveConfirmation,
                   activeColor: const Color(0xFF2979FF),
                   onChanged: (val) {
@@ -408,12 +415,58 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     setModalState(() {});
                   },
                 ),
-                const Divider(height: 32),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Enable Labour / Coolie Charge'),
+                  subtitle: const Text('Add bag-based loading charge'),
+                  value: enableLabourCharge,
+                  activeColor: const Color(0xFF2979FF),
+                  onChanged: (val) {
+                    setState(() => enableLabourCharge = val);
+                    setModalState(() {});
+                  },
+                ),
+                if (enableLabourCharge)
+                  TextField(
+                    controller: labourCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Default Labour Rate per Bag (₹)',
+                      isDense: true,
+                    ),
+                    onChanged: (val) {
+                      defaultLabourPerBag = double.tryParse(val) ?? 3.0;
+                    },
+                  ),
+                const SizedBox(height: 10),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('UPI Payment QR Code'),
+                  subtitle: const Text('Display scanner on bill and PDF'),
+                  value: showUpiQr,
+                  activeColor: const Color(0xFF2979FF),
+                  onChanged: (val) {
+                    setState(() => showUpiQr = val);
+                    setModalState(() {});
+                  },
+                ),
+                if (showUpiQr)
+                  TextField(
+                    controller: upiCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Business UPI ID (e.g. name@okhdfcbank)',
+                      isDense: true,
+                    ),
+                    onChanged: (val) {
+                      upiId = val.trim();
+                    },
+                  ),
+                const Divider(height: 28),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.person_pin, color: Colors.amberAccent),
                   title: const Text('Developer & Contact Info'),
-                  subtitle: const Text('Sudhi (S Tech) - Contact details'),
+                  subtitle: const Text('Sudhi (S Tech) - Details'),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 14),
                   onTap: () {
                     Navigator.pop(ctx);
@@ -512,6 +565,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         companyName: companyName,
         companyLocation: companyLocation,
         askSaveConfirmation: askSaveConfirmation,
+        enableLabourCharge: enableLabourCharge,
+        defaultLabourPerBag: defaultLabourPerBag,
+        showUpiQr: showUpiQr,
+        upiId: upiId,
         onClearEdit: () => setState(() => invoiceToEdit = null),
         onSaveEstimate: (estData) async => await sendSheetRequest({
           'action': 'add',
@@ -654,6 +711,10 @@ class EstimateScreen extends StatefulWidget {
   final String companyName;
   final String companyLocation;
   final bool askSaveConfirmation;
+  final bool enableLabourCharge;
+  final double defaultLabourPerBag;
+  final bool showUpiQr;
+  final String upiId;
   final VoidCallback onClearEdit;
   final Future<bool> Function(Map<String, dynamic>) onSaveEstimate;
   final Future<bool> Function(Map<String, dynamic>) onAddCustomer;
@@ -668,6 +729,10 @@ class EstimateScreen extends StatefulWidget {
     required this.companyName,
     required this.companyLocation,
     required this.askSaveConfirmation,
+    required this.enableLabourCharge,
+    required this.defaultLabourPerBag,
+    required this.showUpiQr,
+    required this.upiId,
     required this.onClearEdit,
     required this.onSaveEstimate,
     required this.onAddCustomer,
@@ -683,10 +748,14 @@ class _EstimateScreenState extends State<EstimateScreen> {
   List<Map<String, dynamic>> billItems = [];
   bool isSaving = false;
   String? currentEditingEstNo;
+  String paymentMode = 'CASH';
+  double labourTotal = 0.0;
+  final TextEditingController labourController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    labourController.text = '0';
     _checkIncomingEdit();
   }
 
@@ -721,19 +790,26 @@ class _EstimateScreenState extends State<EstimateScreen> {
               'unit': 'RATE PER KG',
               'total': qty * rate,
             });
-          } else {
-            billItems.add({
-              'name': p,
-              'rate': 0.0,
-              'qty': 1.0,
-              'unit': '',
-              'total': 0.0,
-            });
           }
         }
       }
       widget.onClearEdit();
+      _recalcLabour();
     }
+  }
+
+  void _recalcLabour() {
+    if (!widget.enableLabourCharge) {
+      labourTotal = 0.0;
+      labourController.text = '0';
+      return;
+    }
+    double totalBags = 0.0;
+    for (var it in billItems) {
+      totalBags += (it['qty'] as num).toDouble();
+    }
+    labourTotal = totalBags * widget.defaultLabourPerBag;
+    labourController.text = labourTotal.toStringAsFixed(1);
   }
 
   String _getNextEstimateNumber() {
@@ -754,12 +830,17 @@ class _EstimateScreenState extends State<EstimateScreen> {
     return 'EST-${next.toString().padLeft(4, '0')}';
   }
 
-  double get grandTotal {
+  double get itemsSubTotal {
     double sum = 0;
     for (var b in billItems) {
       sum += (b['total'] as num).toDouble();
     }
     return sum;
+  }
+
+  double get grandTotal {
+    double labour = double.tryParse(labourController.text) ?? 0.0;
+    return itemsSubTotal + labour;
   }
 
   void _editBillItem(int index) {
@@ -796,6 +877,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                 billItems[index]['qty'] = newQty;
                 billItems[index]['rate'] = newRate;
                 billItems[index]['total'] = newQty * newRate;
+                _recalcLabour();
               });
               Navigator.pop(ctx);
             },
@@ -807,7 +889,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
   }
 
   Future<void> _generatePdfInvoice(String estNo, String date, String cust,
-      List<Map<String, dynamic>> items, double total) async {
+      List<Map<String, dynamic>> items, double total, String pMode, double coolie) async {
     final doc = pw.Document();
 
     doc.addPage(
@@ -848,9 +930,17 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   ],
                 ),
                 pw.SizedBox(height: 4),
-                pw.Text('Customer: $cust',
-                    style: pw.TextStyle(
-                        fontSize: 13, fontWeight: pw.FontWeight.bold)),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Customer: $cust',
+                        style: pw.TextStyle(
+                            fontSize: 13, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('Payment: $pMode',
+                        style: pw.TextStyle(
+                            fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                  ],
+                ),
                 pw.SizedBox(height: 12),
                 pw.Table(
                   border: pw.TableBorder.all(color: PdfColors.grey400),
@@ -911,11 +1001,22 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     }),
                   ],
                 ),
-                pw.SizedBox(height: 12),
+                pw.SizedBox(height: 10),
+                if (coolie > 0)
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.end,
+                    children: [
+                      pw.Text('Labour / Coolie Charge:  ',
+                          style: const pw.TextStyle(fontSize: 12)),
+                      pw.Text('INR ${coolie.toStringAsFixed(2)}',
+                          style: const pw.TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                pw.SizedBox(height: 4),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.end,
                   children: [
-                    pw.Text('Grand Total: ',
+                    pw.Text('Grand Total:  ',
                         style: pw.TextStyle(
                             fontSize: 14, fontWeight: pw.FontWeight.bold)),
                     pw.Text('INR ${total.toStringAsFixed(2)}',
@@ -923,6 +1024,32 @@ class _EstimateScreenState extends State<EstimateScreen> {
                             fontSize: 16, fontWeight: pw.FontWeight.bold)),
                   ],
                 ),
+                if (widget.showUpiQr && widget.upiId.isNotEmpty) ...[
+                  pw.SizedBox(height: 16),
+                  pw.Divider(thickness: 0.5),
+                  pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      pw.BarcodeWidget(
+                        barcode: pw.Barcode.qrCode(),
+                        data: "upi://pay?pa=${widget.upiId}&pn=${Uri.encodeComponent(widget.companyName)}&am=${total.toStringAsFixed(2)}&cu=INR",
+                        width: 70,
+                        height: 70,
+                      ),
+                      pw.SizedBox(width: 14),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text('Scan to Pay via UPI / GPay / PhonePe',
+                              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                          pw.Text('UPI ID: ${widget.upiId}', style: const pw.TextStyle(fontSize: 10)),
+                          pw.Text('Amount: INR ${total.toStringAsFixed(2)}',
+                              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
                 pw.Spacer(),
                 pw.Divider(thickness: 0.5),
                 pw.Center(
@@ -944,7 +1071,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
   }
 
   void _shareViaWhatsApp(String estNo, String date, String cust,
-      List<Map<String, dynamic>> items, double total) async {
+      List<Map<String, dynamic>> items, double total, String pMode, double coolie) async {
     StringBuffer sb = StringBuffer();
     sb.writeln("🧾 *${widget.companyName.toUpperCase()}*");
     sb.writeln("📍 *${widget.companyLocation}*");
@@ -953,18 +1080,27 @@ class _EstimateScreenState extends State<EstimateScreen> {
     sb.writeln("🔢 *Est No:* $estNo");
     sb.writeln("📅 *Date:* $date");
     sb.writeln("👤 *Customer:* $cust");
+    sb.writeln("💳 *Payment:* $pMode");
     sb.writeln("──────────────────────");
     sb.writeln("📦 *ITEMS LIST:*");
 
     int count = 1;
     for (var it in items) {
       sb.writeln("$count️⃣ *${it['name']}*");
-      sb.writeln(" ▫️ ${it['qty']} × ₹${it['rate']} = *₹${it['total']}*");
+      sb.writeln("   ▫️ ${it['qty']} × ₹${it['rate']} = *₹${it['total']}*");
       count++;
+    }
+
+    if (coolie > 0) {
+      sb.writeln("──────────────────────");
+      sb.writeln("🏗️ *Labour / Coolie:* ₹${coolie.toStringAsFixed(2)}");
     }
 
     sb.writeln("──────────────────────");
     sb.writeln("💰 *GRAND TOTAL: ₹${total.toStringAsFixed(2)}*");
+    if (widget.showUpiQr && widget.upiId.isNotEmpty) {
+      sb.writeln("📲 *UPI ID:* ${widget.upiId}");
+    }
     sb.writeln("──────────────────────");
     sb.writeln("_Thank you for your business!_");
 
@@ -981,7 +1117,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
   }
 
   void _showSavedOptions(String estNo, String date, String cust,
-      List<Map<String, dynamic>> items, double total) {
+      List<Map<String, dynamic>> items, double total, String pMode, double coolie) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1009,6 +1145,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     billItems.clear();
                     selectedCustomer = '';
                     currentEditingEstNo = null;
+                    labourController.text = '0';
                   });
                 },
                 child: Container(
@@ -1024,11 +1161,12 @@ class _EstimateScreenState extends State<EstimateScreen> {
                 borderRadius: BorderRadius.circular(50),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _generatePdfInvoice(estNo, date, cust, items, total);
+                  _generatePdfInvoice(estNo, date, cust, items, total, pMode, coolie);
                   setState(() {
                     billItems.clear();
                     selectedCustomer = '';
                     currentEditingEstNo = null;
+                    labourController.text = '0';
                   });
                 },
                 child: Container(
@@ -1044,11 +1182,12 @@ class _EstimateScreenState extends State<EstimateScreen> {
                 borderRadius: BorderRadius.circular(50),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _shareViaWhatsApp(estNo, date, cust, items, total);
+                  _shareViaWhatsApp(estNo, date, cust, items, total, pMode, coolie);
                   setState(() {
                     billItems.clear();
                     selectedCustomer = '';
                     currentEditingEstNo = null;
+                    labourController.text = '0';
                   });
                 },
                 child: Container(
@@ -1401,6 +1540,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   'unit': item['RATE PER KG/BAG'] ?? 'RATE PER KG',
                   'total': qty * rate,
                 });
+                _recalcLabour();
               });
               Navigator.pop(ctx);
             },
@@ -1423,6 +1563,8 @@ class _EstimateScreenState extends State<EstimateScreen> {
     final currentCustomer = selectedCustomer;
     final currentBillItems = List<Map<String, dynamic>>.from(billItems);
     final currentTotal = grandTotal;
+    final coolie = double.tryParse(labourController.text) ?? 0.0;
+    final pMode = paymentMode;
 
     final estData = {
       'ESTIMATE NO': estNo,
@@ -1430,12 +1572,13 @@ class _EstimateScreenState extends State<EstimateScreen> {
       'CUSTOMER NAME': currentCustomer,
       'ITEMS SUMMARY': summary,
       'TOTAL AMOUNT': currentTotal,
+      'PAYMENT MODE': pMode,
     };
 
     await widget.onSaveEstimate(estData);
     setState(() => isSaving = false);
 
-    _showSavedOptions(estNo, date, currentCustomer, currentBillItems, currentTotal);
+    _showSavedOptions(estNo, date, currentCustomer, currentBillItems, currentTotal, pMode, coolie);
   }
 
   void _saveEstimate() {
@@ -1460,7 +1603,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
             ],
           ),
           content: Text(
-            'Save invoice for $selectedCustomer?\nTotal: ₹${grandTotal.toStringAsFixed(2)}',
+            'Customer: $selectedCustomer\nPayment: $paymentMode\nTotal: ₹${grandTotal.toStringAsFixed(2)}',
             style: const TextStyle(fontSize: 14),
           ),
           actions: [
@@ -1511,6 +1654,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     currentEditingEstNo = null;
                     billItems.clear();
                     selectedCustomer = '';
+                    labourController.text = '0';
                   }),
                 ),
               ],
@@ -1530,49 +1674,84 @@ class _EstimateScreenState extends State<EstimateScreen> {
               ),
             ],
           ),
-          child: Row(
+          child: Column(
             children: [
-              Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: _openCustomerPicker,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF242A36) : const Color(0xFFEDF2F7),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
                       borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            selectedCustomer.isEmpty ? 'Select Customer *' : selectedCustomer,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: selectedCustomer.isEmpty ? Colors.grey : const Color(0xFF2979FF),
-                            ),
-                          ),
+                      onTap: _openCustomerPicker,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF242A36) : const Color(0xFFEDF2F7),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const Icon(Icons.keyboard_arrow_down, color: Color(0xFF2979FF)),
-                      ],
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                selectedCustomer.isEmpty ? 'Select Customer *' : selectedCustomer,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: selectedCustomer.isEmpty ? Colors.grey : const Color(0xFF2979FF),
+                                ),
+                              ),
+                            ),
+                            const Icon(Icons.keyboard_arrow_down, color: Color(0xFF2979FF)),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Item'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2979FF),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: _openItemPicker,
+                  ),
+                ],
               ),
-              const SizedBox(width: 10),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Item'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2979FF),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: _openItemPicker,
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Payment Mode:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  Row(
+                    children: [
+                      ChoiceChip(
+                        label: const Text('CASH', style: TextStyle(fontSize: 11)),
+                        selected: paymentMode == 'CASH',
+                        selectedColor: const Color(0xFF2E7D32),
+                        onSelected: (val) => setState(() => paymentMode = 'CASH'),
+                      ),
+                      const SizedBox(width: 6),
+                      ChoiceChip(
+                        label: const Text('CREDIT', style: TextStyle(fontSize: 11)),
+                        selected: paymentMode == 'CREDIT',
+                        selectedColor: Colors.orange.shade800,
+                        onSelected: (val) => setState(() => paymentMode = 'CREDIT'),
+                      ),
+                      const SizedBox(width: 6),
+                      ChoiceChip(
+                        label: const Text('UPI', style: TextStyle(fontSize: 11)),
+                        selected: paymentMode == 'UPI',
+                        selectedColor: const Color(0xFF2979FF),
+                        onSelected: (val) => setState(() => paymentMode = 'UPI'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
@@ -1628,7 +1807,10 @@ class _EstimateScreenState extends State<EstimateScreen> {
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                              onPressed: () => setState(() => billItems.removeAt(idx)),
+                              onPressed: () => setState(() {
+                                billItems.removeAt(idx);
+                                _recalcLabour();
+                              }),
                             ),
                           ],
                         ),
@@ -1637,6 +1819,39 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   },
                 ),
         ),
+        if (widget.enableLabourCharge && billItems.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            color: Theme.of(context).cardTheme.color,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.handshake_outlined, size: 16, color: Colors.amberAccent),
+                    SizedBox(width: 6),
+                    Text('Labour / Coolie (₹):', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                SizedBox(
+                  width: 90,
+                  height: 38,
+                  child: TextField(
+                    controller: labourController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.end,
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF242A36) : const Color(0xFFEDF2F7),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+              ],
+            ),
+          ),
         Container(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           decoration: BoxDecoration(
@@ -1895,6 +2110,9 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
     sb.writeln("🔢 *Est No:* ${est['ESTIMATE NO'] ?? '-'}");
     sb.writeln("📅 *Date:* ${_cleanDate(est['DATE'])}");
     sb.writeln("👤 *Customer:* ${est['CUSTOMER NAME'] ?? '-'}");
+    if (est['PAYMENT MODE'] != null) {
+      sb.writeln("💳 *Payment:* ${est['PAYMENT MODE']}");
+    }
     sb.writeln("──────────────────────");
     sb.writeln("📦 *ITEMS LIST:*");
 
@@ -1962,8 +2180,25 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                 ],
               ),
               const SizedBox(height: 6),
-              Text('Customer: ${est['CUSTOMER NAME'] ?? '-'}',
-                  style: const TextStyle(color: Colors.amberAccent, fontSize: 15, fontWeight: FontWeight.bold)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Customer: ${est['CUSTOMER NAME'] ?? '-'}',
+                      style: const TextStyle(color: Colors.amberAccent, fontSize: 15, fontWeight: FontWeight.bold)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: (est['PAYMENT MODE'] == 'CREDIT' ? Colors.orange : Colors.green).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(est['PAYMENT MODE'] ?? 'CASH',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: est['PAYMENT MODE'] == 'CREDIT' ? Colors.orangeAccent : Colors.greenAccent)),
+                  ),
+                ],
+              ),
               const Divider(height: 22),
               const Text('Items Breakdown:',
                   style: TextStyle(fontSize: 13, color: Color(0xFF2979FF), fontWeight: FontWeight.bold)),
@@ -2088,6 +2323,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final reversedList = widget.estimates.reversed.toList();
     final filtered = reversedList.where((raw) {
       final e = raw as Map<String, dynamic>;
@@ -2102,10 +2338,56 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
       return matchesQuery && matchesDate;
     }).toList();
 
+    double totalFilterSales = 0;
+    int totalFilterBills = filtered.length;
+    for (var e in filtered) {
+      totalFilterSales += double.tryParse((e as Map<String, dynamic>)['TOTAL AMOUNT']?.toString() ?? '0') ?? 0.0;
+    }
+
     return Column(
       children: [
+        Container(
+          margin: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1E3C72), Color(0xFF2A5298)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1E3C72).withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('$selectedFilter Summary', style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text('₹${totalFilterSales.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('$totalFilterBills Bills', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              ),
+            ],
+          ),
+        ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
           child: TextField(
             textCapitalization: TextCapitalization.characters,
             inputFormatters: [UpperCaseTextFormatter()],
@@ -2192,12 +2474,31 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   itemBuilder: (context, idx) {
                     final est = filtered[idx] as Map<String, dynamic>;
                     final parsed = _parseSummary(est['ITEMS SUMMARY'] ?? '');
+                    final pMode = est['PAYMENT MODE'] ?? 'CASH';
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
                         onTap: () => _viewInvoiceDetails(est),
-                        title: Text(est['CUSTOMER NAME'] ?? 'Unknown',
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(est['CUSTOMER NAME'] ?? 'Unknown',
+                                  style: const TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: (pMode == 'CREDIT' ? Colors.orange : Colors.green).withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(pMode,
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: pMode == 'CREDIT' ? Colors.orangeAccent : Colors.greenAccent)),
+                            ),
+                          ],
+                        ),
                         subtitle: Text(
                           "${est['ESTIMATE NO']} • ${_cleanDate(est['DATE'])}\nTap to preview items",
                           style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -2256,6 +2557,64 @@ class PriceListTab extends StatefulWidget {
 
 class _PriceListTabState extends State<PriceListTab> {
   String searchQuery = '';
+
+  void _showItemDetailModal(Map<String, dynamic> item) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            const Icon(Icons.inventory_2, color: Color(0xFF2979FF)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(item['ITEM NAME'] ?? 'Item Details', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold))),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDetailRow('Item Name', item['ITEM NAME']),
+            _buildDetailRow('Rate', '₹${item['RATE']}'),
+            _buildDetailRow('Rate Per', item['RATE PER KG/BAG']),
+            _buildDetailRow('Tally Name', item['NAME OF ITEM IN TALLY'] ?? item['ITEM NAME ON TALLY']),
+            _buildDetailRow('Billed In', item['BILLED IN'] ?? 'KILOGRAM'),
+            _buildDetailRow('Taxable Status', item['TAXABLE OR NOT'] ?? 'NON TAXABLE'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.edit, size: 16),
+            label: const Text('Edit Item'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showItemDialog(item);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, dynamic val) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+          Expanded(
+            child: Text(val?.toString().isNotEmpty == true ? val.toString() : '-',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showItemDialog([Map<String, dynamic>? existing]) {
     final nameCtrl = TextEditingController(text: existing?['ITEM NAME'] ?? '');
@@ -2376,8 +2735,9 @@ class _PriceListTabState extends State<PriceListTab> {
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
+                    onTap: () => _showItemDetailModal(item),
                     title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('Tally: $tally\n$rateType', style: const TextStyle(fontSize: 12)),
+                    subtitle: Text('Tally: $tally\n$rateType • Tap to view all', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -2438,6 +2798,89 @@ class _CustomersTabState extends State<CustomersTab> {
         await launchUrl(Uri.parse("https://wa.me/$target"), mode: LaunchMode.externalApplication);
       }
     } catch (_) {}
+  }
+
+  void _showCustomerDetailModal(Map<String, dynamic> c) {
+    final name = c['NAME'] ?? '-';
+    final contact = (c['CONTACT NUMBER'] ?? c['PHONE'] ?? '').toString();
+    final address = (c['ADDRESS'] ?? '').toString();
+    final b2b = (c['B2B NAMES'] ?? c['B2B'] ?? '').toString();
+    final b2c = (c['B2C NAMES'] ?? c['B2C'] ?? '').toString();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            const Icon(Icons.person, color: Color(0xFF2979FF)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(name.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDetailRow('Customer Name', name),
+            _buildDetailRow('Contact Number', contact),
+            _buildDetailRow('Address', address),
+            _buildDetailRow('B2B Names', b2b),
+            _buildDetailRow('B2C Names', b2c),
+            if (contact.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2E7D32)),
+                    icon: const Icon(Icons.call, size: 16),
+                    label: const Text('Call'),
+                    onPressed: () => _callPhone(contact),
+                  ),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
+                    icon: const Icon(Icons.share, size: 16),
+                    label: const Text('WhatsApp'),
+                    onPressed: () => _whatsappPhone(contact),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.edit, size: 16),
+            label: const Text('Edit Details'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showCustomerDialog(c);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, dynamic val) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+          Expanded(
+            child: Text(val?.toString().isNotEmpty == true ? val.toString() : '-',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showCustomerDialog([Map<String, dynamic>? existing]) {
@@ -2569,6 +3012,7 @@ class _CustomersTabState extends State<CustomersTab> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: ListTile(
+                      onTap: () => _showCustomerDetailModal(c),
                       title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
