@@ -293,7 +293,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ],
         ),
         content: Column(
-          mainAxisSize: dynamicSizeColumn(context),
+          mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: compController,
@@ -332,8 +332,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ),
     );
   }
-
-  MainAxisSize dynamicSizeColumn(BuildContext context) => MainAxisSize.min;
 
   void _openSettingsDialog() {
     showModalBottomSheet(
@@ -917,7 +915,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.end,
                   children: [
-                    pw.Text('Grand Total:  ',
+                    pw.Text('Grand Total: ',
                         style: pw.TextStyle(
                             fontSize: 14, fontWeight: pw.FontWeight.bold)),
                     pw.Text('INR ${total.toStringAsFixed(2)}',
@@ -961,7 +959,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
     int count = 1;
     for (var it in items) {
       sb.writeln("$count️⃣ *${it['name']}*");
-      sb.writeln("   ▫️ ${it['qty']} × ₹${it['rate']} = *₹${it['total']}*");
+      sb.writeln(" ▫️ ${it['qty']} × ₹${it['rate']} = *₹${it['total']}*");
       count++;
     }
 
@@ -1860,7 +1858,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.end,
                   children: [
-                    pw.Text('Grand Total:  ',
+                    pw.Text('Grand Total: ',
                         style: pw.TextStyle(
                             fontSize: 14, fontWeight: pw.FontWeight.bold)),
                     pw.Text('INR $total',
@@ -1905,7 +1903,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
     for (var it in parsed) {
       if (it['qty'].toString().isNotEmpty) {
         sb.writeln("$count️⃣ *${it['name']}*");
-        sb.writeln("   ▫️ ${it['qty']} × ₹${it['rate']} = *₹${it['total']}*");
+        sb.writeln(" ▫️ ${it['qty']} × ₹${it['rate']} = *₹${it['total']}*");
       } else {
         sb.writeln("$count️⃣ ${it['name']}");
       }
