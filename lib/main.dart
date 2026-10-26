@@ -223,9 +223,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   String companyName = 'DAVIS & COMPANY';
   String companyLocation = 'ALUVA, ERNAKULAM';
-  final String appVersion = '1.0.5';
+  final String appVersion = '1.0.6';
 
-  bool showSaveConfirmation = true;
+  bool askSaveConfirmation = true;
 
   Map<String, dynamic>? invoiceToEdit;
 
@@ -395,16 +395,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   ],
                 ),
                 const Divider(height: 32),
-                const Text('Billing Preferences',
+                const Text('Billing Security',
                     style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Save Confirmation Dialog'),
-                  subtitle: const Text('Show options popup when invoice is saved'),
-                  value: showSaveConfirmation,
+                  title: const Text('Confirm Before Save'),
+                  subtitle: const Text('Ask confirmation dialog before saving invoice'),
+                  value: askSaveConfirmation,
                   activeColor: const Color(0xFF2979FF),
                   onChanged: (val) {
-                    setState(() => showSaveConfirmation = val);
+                    setState(() => askSaveConfirmation = val);
                     setModalState(() {});
                   },
                 ),
@@ -511,7 +511,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         invoiceToEdit: invoiceToEdit,
         companyName: companyName,
         companyLocation: companyLocation,
-        showSaveConfirmation: showSaveConfirmation,
+        askSaveConfirmation: askSaveConfirmation,
         onClearEdit: () => setState(() => invoiceToEdit = null),
         onSaveEstimate: (estData) async => await sendSheetRequest({
           'action': 'add',
@@ -653,7 +653,7 @@ class EstimateScreen extends StatefulWidget {
   final Map<String, dynamic>? invoiceToEdit;
   final String companyName;
   final String companyLocation;
-  final bool showSaveConfirmation;
+  final bool askSaveConfirmation;
   final VoidCallback onClearEdit;
   final Future<bool> Function(Map<String, dynamic>) onSaveEstimate;
   final Future<bool> Function(Map<String, dynamic>) onAddCustomer;
@@ -667,7 +667,7 @@ class EstimateScreen extends StatefulWidget {
     required this.invoiceToEdit,
     required this.companyName,
     required this.companyLocation,
-    required this.showSaveConfirmation,
+    required this.askSaveConfirmation,
     required this.onClearEdit,
     required this.onSaveEstimate,
     required this.onAddCustomer,
@@ -1001,7 +1001,6 @@ class _EstimateScreenState extends State<EstimateScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              // Done Button
               InkWell(
                 borderRadius: BorderRadius.circular(50),
                 onTap: () {
@@ -1021,7 +1020,6 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   child: const Icon(Icons.check, color: Colors.greenAccent, size: 28),
                 ),
               ),
-              // PDF Button
               InkWell(
                 borderRadius: BorderRadius.circular(50),
                 onTap: () {
@@ -1042,7 +1040,6 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   child: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 28),
                 ),
               ),
-              // WhatsApp Button
               InkWell(
                 borderRadius: BorderRadius.circular(50),
                 onTap: () {
@@ -1072,9 +1069,10 @@ class _EstimateScreenState extends State<EstimateScreen> {
 
   void _showAddCustomerDialog() {
     final nameCtrl = TextEditingController();
+    final contactCtrl = TextEditingController();
+    final addressCtrl = TextEditingController();
     final b2bCtrl = TextEditingController();
     final b2cCtrl = TextEditingController();
-    final remarksCtrl = TextEditingController();
 
     showDialog(
       context: context,
@@ -1091,22 +1089,27 @@ class _EstimateScreenState extends State<EstimateScreen> {
                 decoration: const InputDecoration(labelText: 'Customer Name *'),
               ),
               TextField(
+                controller: contactCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Contact Number'),
+              ),
+              TextField(
+                controller: addressCtrl,
+                textCapitalization: TextCapitalization.characters,
+                inputFormatters: [UpperCaseTextFormatter()],
+                decoration: const InputDecoration(labelText: 'Address'),
+              ),
+              TextField(
                 controller: b2bCtrl,
                 textCapitalization: TextCapitalization.characters,
                 inputFormatters: [UpperCaseTextFormatter()],
-                decoration: const InputDecoration(labelText: 'B2B Name'),
+                decoration: const InputDecoration(labelText: 'B2B Names'),
               ),
               TextField(
                 controller: b2cCtrl,
                 textCapitalization: TextCapitalization.characters,
                 inputFormatters: [UpperCaseTextFormatter()],
-                decoration: const InputDecoration(labelText: 'B2C Name'),
-              ),
-              TextField(
-                controller: remarksCtrl,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [UpperCaseTextFormatter()],
-                decoration: const InputDecoration(labelText: 'Remarks'),
+                decoration: const InputDecoration(labelText: 'B2C Names'),
               ),
             ],
           ),
@@ -1120,9 +1123,10 @@ class _EstimateScreenState extends State<EstimateScreen> {
               final ok = await widget.onAddCustomer({
                 'SL NO': '',
                 'NAME': nameCtrl.text.trim().toUpperCase(),
-                'B2C': b2cCtrl.text.trim().toUpperCase(),
-                'B2B': b2bCtrl.text.trim().toUpperCase(),
-                'REMARKS': remarksCtrl.text.trim().toUpperCase(),
+                'CONTACT NUMBER': contactCtrl.text.trim(),
+                'ADDRESS': addressCtrl.text.trim().toUpperCase(),
+                'B2C NAMES': b2cCtrl.text.trim().toUpperCase(),
+                'B2B NAMES': b2bCtrl.text.trim().toUpperCase(),
               });
               if (ok) {
                 setState(() => selectedCustomer = nameCtrl.text.trim().toUpperCase());
@@ -1209,7 +1213,11 @@ class _EstimateScreenState extends State<EstimateScreen> {
           builder: (context, setModalState) {
             final filteredCusts = widget.customers.where((c) {
               final name = (c['NAME'] ?? '').toString().toLowerCase();
-              return name.contains(filter.toLowerCase());
+              final b2b = (c['B2B NAMES'] ?? c['B2B'] ?? '').toString().toLowerCase();
+              final phone = (c['CONTACT NUMBER'] ?? '').toString();
+              return name.contains(filter.toLowerCase()) ||
+                     b2b.contains(filter.toLowerCase()) ||
+                     phone.contains(filter);
             }).toList();
 
             return Container(
@@ -1237,7 +1245,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     inputFormatters: [UpperCaseTextFormatter()],
                     onChanged: (val) => setModalState(() => filter = val),
                     decoration: InputDecoration(
-                      hintText: 'Search customer name...',
+                      hintText: 'Search customer name or phone...',
                       prefixIcon: const Icon(Icons.search),
                       filled: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1251,11 +1259,15 @@ class _EstimateScreenState extends State<EstimateScreen> {
                       itemBuilder: (context, idx) {
                         final c = filteredCusts[idx];
                         final name = c['NAME'] ?? '';
-                        final b2b = c['B2B'] ?? '';
+                        final b2b = c['B2B NAMES'] ?? c['B2B'] ?? '';
+                        final phone = c['CONTACT NUMBER'] ?? '';
                         return ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: b2b.toString().isNotEmpty ? Text(b2b.toString(), style: const TextStyle(color: Colors.grey, fontSize: 12)) : null,
+                          subtitle: Text(
+                            "${b2b.toString().isNotEmpty ? 'B2B: $b2b' : ''}${phone.toString().isNotEmpty ? ' • 📞 $phone' : ''}",
+                            style: const TextStyle(color: Colors.grey, fontSize: 12),
+                          ),
                           onTap: () {
                             setState(() => selectedCustomer = name.toString());
                             Navigator.pop(ctx);
@@ -1399,16 +1411,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
     );
   }
 
-  void _saveEstimate() async {
-    if (selectedCustomer.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a customer first')));
-      return;
-    }
-    if (billItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please add at least one item')));
-      return;
-    }
-
+  void _executeSave() async {
     setState(() => isSaving = true);
 
     String summary = billItems.map((b) => "${b['name']} (${b['qty']} x ${b['rate']})").join(", ");
@@ -1432,17 +1435,52 @@ class _EstimateScreenState extends State<EstimateScreen> {
     await widget.onSaveEstimate(estData);
     setState(() => isSaving = false);
 
-    if (widget.showSaveConfirmation) {
-      _showSavedOptions(estNo, date, currentCustomer, currentBillItems, currentTotal);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Invoice $estNo Saved Successfully!')),
+    _showSavedOptions(estNo, date, currentCustomer, currentBillItems, currentTotal);
+  }
+
+  void _saveEstimate() {
+    if (selectedCustomer.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a customer first')));
+      return;
+    }
+    if (billItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please add at least one item')));
+      return;
+    }
+
+    if (widget.askSaveConfirmation) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.help_outline, color: Color(0xFF2979FF)),
+              SizedBox(width: 8),
+              Text('Confirm Invoice', style: TextStyle(fontSize: 17)),
+            ],
+          ),
+          content: Text(
+            'Save invoice for $selectedCustomer?\nTotal: ₹${grandTotal.toStringAsFixed(2)}',
+            style: const TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2E7D32)),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _executeSave();
+              },
+              child: const Text('Yes, Save'),
+            ),
+          ],
+        ),
       );
-      setState(() {
-        billItems.clear();
-        selectedCustomer = '';
-        currentEditingEstNo = null;
-      });
+    } else {
+      _executeSave();
     }
   }
 
@@ -2381,11 +2419,36 @@ class CustomersTab extends StatefulWidget {
 class _CustomersTabState extends State<CustomersTab> {
   String searchQuery = '';
 
+  void _callPhone(String phone) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (cleanPhone.isEmpty) return;
+    final url = Uri.parse("tel:$cleanPhone");
+    if (await canLaunchUrl(url)) launchUrl(url);
+  }
+
+  void _whatsappPhone(String phone) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleanPhone.isEmpty) return;
+    final target = cleanPhone.length == 10 ? "91$cleanPhone" : cleanPhone;
+    final url = Uri.parse("whatsapp://send?phone=$target");
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      } else {
+        await launchUrl(Uri.parse("https://wa.me/$target"), mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {}
+  }
+
   void _showCustomerDialog([Map<String, dynamic>? existing]) {
     final nameCtrl = TextEditingController(text: existing?['NAME'] ?? '');
-    final b2bCtrl = TextEditingController(text: existing?['B2B'] ?? '');
-    final b2cCtrl = TextEditingController(text: existing?['B2C'] ?? '');
-    final remarksCtrl = TextEditingController(text: existing?['REMARKS'] ?? '');
+    final contactCtrl = TextEditingController(
+        text: (existing?['CONTACT NUMBER'] ?? existing?['PHONE'] ?? '').toString());
+    final addressCtrl = TextEditingController(text: existing?['ADDRESS'] ?? '');
+    final b2bCtrl = TextEditingController(
+        text: existing?['B2B NAMES'] ?? existing?['B2B'] ?? '');
+    final b2cCtrl = TextEditingController(
+        text: existing?['B2C NAMES'] ?? existing?['B2C'] ?? '');
 
     showDialog(
       context: context,
@@ -2403,22 +2466,27 @@ class _CustomersTabState extends State<CustomersTab> {
                 decoration: const InputDecoration(labelText: 'Customer Name *'),
               ),
               TextField(
+                controller: contactCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Contact Number'),
+              ),
+              TextField(
+                controller: addressCtrl,
+                textCapitalization: TextCapitalization.characters,
+                inputFormatters: [UpperCaseTextFormatter()],
+                decoration: const InputDecoration(labelText: 'Address'),
+              ),
+              TextField(
                 controller: b2bCtrl,
                 textCapitalization: TextCapitalization.characters,
                 inputFormatters: [UpperCaseTextFormatter()],
-                decoration: const InputDecoration(labelText: 'B2B / GST Name'),
+                decoration: const InputDecoration(labelText: 'B2B Names'),
               ),
               TextField(
                 controller: b2cCtrl,
                 textCapitalization: TextCapitalization.characters,
                 inputFormatters: [UpperCaseTextFormatter()],
-                decoration: const InputDecoration(labelText: 'B2C Name'),
-              ),
-              TextField(
-                controller: remarksCtrl,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [UpperCaseTextFormatter()],
-                decoration: const InputDecoration(labelText: 'Remarks'),
+                decoration: const InputDecoration(labelText: 'B2C Names'),
               ),
             ],
           ),
@@ -2431,9 +2499,10 @@ class _CustomersTabState extends State<CustomersTab> {
               Navigator.pop(ctx);
               final payload = {
                 'NAME': nameCtrl.text.trim().toUpperCase(),
-                'B2B': b2bCtrl.text.trim().toUpperCase(),
-                'B2C': b2cCtrl.text.trim().toUpperCase(),
-                'REMARKS': remarksCtrl.text.trim().toUpperCase(),
+                'CONTACT NUMBER': contactCtrl.text.trim(),
+                'ADDRESS': addressCtrl.text.trim().toUpperCase(),
+                'B2B NAMES': b2bCtrl.text.trim().toUpperCase(),
+                'B2C NAMES': b2cCtrl.text.trim().toUpperCase(),
               };
 
               if (existing == null) {
@@ -2454,9 +2523,11 @@ class _CustomersTabState extends State<CustomersTab> {
     final filtered = widget.customers.where((rawCust) {
       final c = rawCust as Map<String, dynamic>;
       final name = (c['NAME'] ?? '').toString().toLowerCase();
-      final b2b = (c['B2B'] ?? '').toString().toLowerCase();
+      final b2b = (c['B2B NAMES'] ?? c['B2B'] ?? '').toString().toLowerCase();
+      final phone = (c['CONTACT NUMBER'] ?? '').toString();
+      final address = (c['ADDRESS'] ?? '').toString().toLowerCase();
       final q = searchQuery.toLowerCase();
-      return name.contains(q) || b2b.contains(q);
+      return name.contains(q) || b2b.contains(q) || phone.contains(q) || address.contains(q);
     }).toList();
 
     return Scaffold(
@@ -2474,7 +2545,7 @@ class _CustomersTabState extends State<CustomersTab> {
               inputFormatters: [UpperCaseTextFormatter()],
               onChanged: (val) => setState(() => searchQuery = val),
               decoration: InputDecoration(
-                hintText: 'Search customers...',
+                hintText: 'Search customer, phone, address...',
                 prefixIcon: const Icon(Icons.search, color: Color(0xFF2979FF)),
                 filled: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
@@ -2489,25 +2560,72 @@ class _CustomersTabState extends State<CustomersTab> {
               itemBuilder: (context, index) {
                 final c = filtered[index] as Map<String, dynamic>;
                 final name = c['NAME'] ?? '-';
-                final b2b = c['B2B'] ?? '';
-                final remarks = c['REMARKS'] ?? '';
+                final contact = (c['CONTACT NUMBER'] ?? c['PHONE'] ?? '').toString();
+                final address = (c['ADDRESS'] ?? '').toString();
+                final b2b = (c['B2B NAMES'] ?? c['B2B'] ?? '').toString();
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (b2b.toString().isNotEmpty)
-                          Text('B2B: $b2b', style: const TextStyle(fontSize: 13)),
-                        if (remarks.toString().isNotEmpty)
-                          Text('Remarks: $remarks', style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                      ],
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit, size: 18, color: Colors.grey),
-                      onPressed: () => _showCustomerDialog(c),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: ListTile(
+                      title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (contact.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2.0),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.call, size: 13, color: Colors.greenAccent),
+                                  const SizedBox(width: 4),
+                                  Text(contact, style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w600, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                          if (address.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2.0),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.location_on_outlined, size: 13, color: Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(address, style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (b2b.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2.0),
+                              child: Text('B2B: $b2b', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                            ),
+                        ],
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (contact.isNotEmpty) ...[
+                            IconButton(
+                              icon: const Icon(Icons.call, size: 19, color: Colors.greenAccent),
+                              tooltip: 'Call',
+                              onPressed: () => _callPhone(contact),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.share, size: 19, color: Color(0xFF25D366)),
+                              tooltip: 'WhatsApp',
+                              onPressed: () => _whatsappPhone(contact),
+                            ),
+                          ],
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 19, color: Colors.grey),
+                            tooltip: 'Edit',
+                            onPressed: () => _showCustomerDialog(c),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );
