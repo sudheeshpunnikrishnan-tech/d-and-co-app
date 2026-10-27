@@ -235,16 +235,23 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
   bool _isLoading = true;
+  bool _isBackgroundSyncing = false;
   Map<String, dynamic> _allData = {};
   String _errorMessage = '';
 
   String companyName = 'DAVIS & COMPANY';
   String companyLocation = 'ALUVA, ERNAKULAM';
-  final String appVersion = '1.1.6';
+  final String appVersion = '1.1.7';
 
   bool askSaveConfirmation = true;
   bool enableLabourCharge = true;
   double defaultLabourPerBag = 3.0;
+  
+  // Category-based coolie settings
+  bool enableCategoryCoolie = true;
+  double riceCooliePerBag = 9.0;
+  double provisionCooliePerBag = 8.0;
+
   bool showUpiQr = true;
   String upiId = 'davisandco@upi';
 
@@ -259,9 +266,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     fetchData();
   }
 
-  Future<void> fetchData() async {
+  Future<void> fetchData({bool isBackground = false}) async {
     setState(() {
-      _isLoading = true;
+      if (isBackground) {
+        _isBackgroundSyncing = true;
+      } else {
+        _isLoading = true;
+      }
       _errorMessage = '';
     });
     try {
@@ -270,28 +281,32 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         setState(() {
           _allData = json.decode(response.body);
           _isLoading = false;
+          _isBackgroundSyncing = false;
         });
       } else {
         setState(() {
           _errorMessage = 'Failed to load data (Status: ${response.statusCode})';
           _isLoading = false;
+          _isBackgroundSyncing = false;
         });
       }
     } catch (e) {
       setState(() {
         _errorMessage = 'Error connecting to database: $e';
         _isLoading = false;
+        _isBackgroundSyncing = false;
       });
     }
   }
 
   Future<bool> sendSheetRequest(Map<String, dynamic> payload) async {
+    setState(() => _isBackgroundSyncing = true);
     try {
       await http.post(Uri.parse(apiUrl), body: json.encode(payload));
-      fetchData();
+      fetchData(isBackground: true);
       return true;
     } catch (e) {
-      fetchData();
+      fetchData(isBackground: true);
       return true;
     }
   }
@@ -399,6 +414,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void _openSettingsDialog() {
     final upiCtrl = TextEditingController(text: upiId);
     final labourCtrl = TextEditingController(text: defaultLabourPerBag.toString());
+    final riceCtrl = TextEditingController(text: riceCooliePerBag.toString());
+    final provCtrl = TextEditingController(text: provisionCooliePerBag.toString());
 
     showModalBottomSheet(
       context: context,
@@ -480,13 +497,48 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     setModalState(() {});
                   },
                 ),
-                if (enableLabourCharge)
-                  TextField(
-                    controller: labourCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Default Labour Rate per Bag (₹)', isDense: true),
-                    onChanged: (val) => defaultLabourPerBag = double.tryParse(val) ?? 3.0,
+                if (enableLabourCharge) ...[
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Category-wise Coolie Rates'),
+                    subtitle: const Text('RICE: ₹9, PROVISION: ₹8 per bag'),
+                    value: enableCategoryCoolie,
+                    activeColor: const Color(0xFF2979FF),
+                    onChanged: (val) {
+                      setState(() => enableCategoryCoolie = val);
+                      setModalState(() {});
+                    },
                   ),
+                  if (enableCategoryCoolie)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: riceCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(labelText: 'RICE Rate (₹/Bag)', isDense: true),
+                            onChanged: (val) => riceCooliePerBag = double.tryParse(val) ?? 9.0,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: provCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(labelText: 'PROVISION Rate (₹/Bag)', isDense: true),
+                            onChanged: (val) => provisionCooliePerBag = double.tryParse(val) ?? 8.0,
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    TextField(
+                      controller: labourCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Default Labour Rate per Bag (₹)', isDense: true),
+                      onChanged: (val) => defaultLabourPerBag = double.tryParse(val) ?? 3.0,
+                    ),
+                ],
                 const SizedBox(height: 10),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -578,6 +630,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         askSaveConfirmation: askSaveConfirmation,
         enableLabourCharge: enableLabourCharge,
         defaultLabourPerBag: defaultLabourPerBag,
+        enableCategoryCoolie: enableCategoryCoolie,
+        riceCooliePerBag: riceCooliePerBag,
+        provisionCooliePerBag: provisionCooliePerBag,
         showUpiQr: showUpiQr,
         upiId: upiId,
         onClearEdit: () => setState(() => invoiceToEdit = null),
@@ -663,14 +718,24 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             onPressed: _openCalculatorDialog,
           ),
           IconButton(icon: const Icon(Icons.tune_outlined), onPressed: _openSettingsDialog),
-          IconButton(icon: const Icon(Icons.sync), onPressed: fetchData),
+          IconButton(icon: const Icon(Icons.sync), onPressed: () => fetchData()),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage.isNotEmpty
               ? Center(child: Text(_errorMessage, style: const TextStyle(color: Colors.redAccent)))
-              : screens[_currentIndex],
+              : Column(
+                  children: [
+                    if (_isBackgroundSyncing)
+                      const LinearProgressIndicator(
+                        minHeight: 3,
+                        backgroundColor: Colors.transparent,
+                        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2979FF)),
+                      ),
+                    Expanded(child: screens[_currentIndex]),
+                  ],
+                ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) => setState(() => _currentIndex = index),
@@ -943,6 +1008,9 @@ class EstimateScreen extends StatefulWidget {
   final bool askSaveConfirmation;
   final bool enableLabourCharge;
   final double defaultLabourPerBag;
+  final bool enableCategoryCoolie;
+  final double riceCooliePerBag;
+  final double provisionCooliePerBag;
   final bool showUpiQr;
   final String upiId;
   final VoidCallback onClearEdit;
@@ -961,6 +1029,9 @@ class EstimateScreen extends StatefulWidget {
     required this.askSaveConfirmation,
     required this.enableLabourCharge,
     required this.defaultLabourPerBag,
+    required this.enableCategoryCoolie,
+    required this.riceCooliePerBag,
+    required this.provisionCooliePerBag,
     required this.showUpiQr,
     required this.upiId,
     required this.onClearEdit,
@@ -1007,7 +1078,6 @@ class _EstimateScreenState extends State<EstimateScreen> {
       if (rawSummary.isNotEmpty) {
         final parts = rawSummary.split(', ');
         for (var p in parts) {
-          // Parse format: Name (Qty Unit, Bags B | Tax T% x Rate) or legacy
           final match = RegExp(r'^(.*?)\s*\((.*?)\)$').firstMatch(p.trim());
           if (match != null) {
             final name = match.group(1)?.trim() ?? '';
@@ -1018,6 +1088,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
             double bag = 1.0;
             double rate = 0.0;
             double taxRate = 0.0;
+            String category = '';
 
             final xParts = inner.split(' x ');
             if (xParts.length == 2) {
@@ -1035,13 +1106,20 @@ class _EstimateScreenState extends State<EstimateScreen> {
                 bag = double.tryParse(qubMatch.group(3) ?? '') ?? (unit == 'BAG' ? qty : 1.0);
               }
             } else {
-              // Legacy format check
               final legacyMatch = RegExp(r'(\d+(?:\.\d+)?)\s*(KG|BAG|NOS)?\s*x\s*(\d+(?:\.\d+)?)').firstMatch(inner);
               if (legacyMatch != null) {
                 qty = double.tryParse(legacyMatch.group(1) ?? '1') ?? 1.0;
                 unit = legacyMatch.group(2) ?? 'BAG';
                 rate = double.tryParse(legacyMatch.group(3) ?? '0') ?? 0.0;
                 bag = unit == 'BAG' ? qty : 1.0;
+              }
+            }
+
+            // Look up category from existing items
+            for (var it in widget.items) {
+              if ((it['ITEM NAME'] ?? '').toString().trim().toUpperCase() == name.toUpperCase()) {
+                category = (it['CATEGORY'] ?? it['CAT'] ?? '').toString().toUpperCase();
+                break;
               }
             }
 
@@ -1052,6 +1130,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
               'unit': unit,
               'bag': bag,
               'taxRate': taxRate,
+              'category': category,
               'total': qty * rate,
             });
           }
@@ -1064,14 +1143,41 @@ class _EstimateScreenState extends State<EstimateScreen> {
 
   void _recalcLabour() {
     if (!widget.enableLabourCharge) return;
-    double totalBags = 0.0;
-    for (var it in billItems) {
-      totalBags += (it['bag'] as num).toDouble();
+
+    double calculatedLabour = 0.0;
+
+    if (widget.enableCategoryCoolie) {
+      for (var it in billItems) {
+        final bagCount = (it['bag'] as num).toDouble();
+        final cat = (it['category'] ?? '').toString().toUpperCase();
+        if (cat.contains('RICE') || cat.contains('അരി')) {
+          calculatedLabour += bagCount * widget.riceCooliePerBag;
+        } else if (cat.contains('PROVISION') || cat.contains('മളിക')) {
+          calculatedLabour += bagCount * widget.provisionCooliePerBag;
+        } else {
+          // If no specific category matched, check item name keywords or use provision as fallback
+          final name = (it['name'] ?? '').toString().toUpperCase();
+          if (name.contains('RICE') || name.contains('VADI') || name.contains('JAYA') || name.contains('MATTA') || name.contains('SONA')) {
+            calculatedLabour += bagCount * widget.riceCooliePerBag;
+          } else {
+            calculatedLabour += bagCount * widget.provisionCooliePerBag;
+          }
+        }
+      }
+    } else {
+      double totalBags = 0.0;
+      for (var it in billItems) {
+        totalBags += (it['bag'] as num).toDouble();
+      }
+      calculatedLabour = totalBags * widget.defaultLabourPerBag;
     }
-    labourController.text = (totalBags * widget.defaultLabourPerBag).toStringAsFixed(1);
+
+    labourController.text = calculatedLabour.toStringAsFixed(1);
   }
 
-  double get itemsSubTotal {
+  // Inclusive Tax Calculations:
+  // Item total is already inclusive of tax.
+  double get totalInclusiveItemsAmount {
     double sum = 0;
     for (var b in billItems) {
       sum += (b['total'] as num).toDouble();
@@ -1079,24 +1185,27 @@ class _EstimateScreenState extends State<EstimateScreen> {
     return sum;
   }
 
-  double get totalTaxAmount {
-    double tax = 0;
+  double get totalTaxableValue {
+    double taxableSum = 0;
     for (var b in billItems) {
+      final total = (b['total'] as num).toDouble();
       final tRate = (b['taxRate'] as num?)?.toDouble() ?? 0.0;
       if (tRate > 0) {
-        final itemAmt = (b['total'] as num).toDouble();
-        tax += (itemAmt * tRate) / 100.0;
+        taxableSum += total / (1.0 + (tRate / 100.0));
+      } else {
+        taxableSum += total;
       }
     }
-    return tax;
+    return taxableSum;
   }
 
+  double get totalTaxAmount => totalInclusiveItemsAmount - totalTaxableValue;
   double get cgstAmount => totalTaxAmount / 2.0;
   double get sgstAmount => totalTaxAmount / 2.0;
 
   double get rawGrandTotal {
     double labour = double.tryParse(labourController.text) ?? 0.0;
-    return itemsSubTotal + totalTaxAmount + labour;
+    return totalInclusiveItemsAmount + labour;
   }
 
   double get roundedGrandTotal => rawGrandTotal.roundToDouble();
@@ -1167,6 +1276,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
     final rateCtrl = TextEditingController();
     final taxRateCtrl = TextEditingController(text: '5');
     String selectedRateType = 'BAG';
+    String selectedCategory = 'RICE';
     bool isTaxable = false;
 
     showDialog(
@@ -1187,32 +1297,54 @@ class _EstimateScreenState extends State<EstimateScreen> {
                 TextField(
                   controller: rateCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Rate (₹) *'),
+                  decoration: const InputDecoration(labelText: 'Rate (₹) [Incl. Tax] *'),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: selectedRateType,
-                  decoration: const InputDecoration(
-                    labelText: 'Rate Per (Unit) *',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'BAG', child: Text('BAG (ചാക്ക്)')),
-                    DropdownMenuItem(value: 'KG', child: Text('KG (കിലോ)')),
-                    DropdownMenuItem(value: 'NOS', child: Text('NOS (എണ്ണം)')),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: selectedRateType,
+                        decoration: const InputDecoration(
+                          labelText: 'Unit *',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'BAG', child: Text('BAG')),
+                          DropdownMenuItem(value: 'KG', child: Text('KG')),
+                          DropdownMenuItem(value: 'NOS', child: Text('NOS')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setDlgState(() => selectedRateType = val);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: selectedCategory,
+                        decoration: const InputDecoration(
+                          labelText: 'Category *',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'RICE', child: Text('RICE (₹9)')),
+                          DropdownMenuItem(value: 'PROVISION', child: Text('PROV (₹8)')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setDlgState(() => selectedCategory = val);
+                        },
+                      ),
+                    ),
                   ],
-                  onChanged: (val) {
-                    if (val != null) {
-                      setDlgState(() => selectedRateType = val);
-                    }
-                  },
                 ),
                 const SizedBox(height: 8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Taxable Item'),
-                  subtitle: Text(isTaxable ? 'GST will be applied' : 'Non-taxable goods'),
+                  subtitle: Text(isTaxable ? 'Inclusive GST rate' : 'Non-taxable goods'),
                   value: isTaxable,
                   activeColor: const Color(0xFF2979FF),
                   onChanged: (val) => setDlgState(() => isTaxable = val),
@@ -1235,6 +1367,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                 await widget.onAddItem({
                   'ITEM NAME': nameCtrl.text.trim().toUpperCase(),
                   'RATE PER KG/BAG': selectedRateType,
+                  'CATEGORY': selectedCategory,
                   'RATE': double.tryParse(rateCtrl.text) ?? 0,
                   'TAXABLE OR NOT': isTaxable ? 'TAXABLE' : 'NON TAXABLE',
                   'TAX RATE': isTaxable ? (double.tryParse(taxRateCtrl.text) ?? 5.0) : 0,
@@ -1340,9 +1473,12 @@ class _EstimateScreenState extends State<EstimateScreen> {
             final filteredItems = widget.items.where((it) {
               final name = (it['ITEM NAME'] ?? '').toString().toLowerCase();
               final unit = (it['RATE PER KG/BAG'] ?? '').toString().toUpperCase();
+              final cat = (it['CATEGORY'] ?? '').toString().toUpperCase();
               final matchesQuery = name.contains(filter.toLowerCase());
               if (selectedCategory == 'BAG') return matchesQuery && unit.contains('BAG');
               if (selectedCategory == 'KG') return matchesQuery && unit.contains('KG');
+              if (selectedCategory == 'RICE') return matchesQuery && (cat.contains('RICE') || name.contains('RICE') || name.contains('VADI') || name.contains('JAYA'));
+              if (selectedCategory == 'PROVISION') return matchesQuery && (cat.contains('PROVISION') || (!cat.contains('RICE') && !name.contains('RICE') && !name.contains('VADI')));
               return matchesQuery;
             }).toList();
 
@@ -1379,26 +1515,41 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      ChoiceChip(
-                        label: const Text('All Items'),
-                        selected: selectedCategory == 'ALL',
-                        onSelected: (_) => setModalState(() => selectedCategory = 'ALL'),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text('Bags (ചാക്ക്)'),
-                        selected: selectedCategory == 'BAG',
-                        onSelected: (_) => setModalState(() => selectedCategory = 'BAG'),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text('KG (കിലോ)'),
-                        selected: selectedCategory == 'KG',
-                        onSelected: (_) => setModalState(() => selectedCategory = 'KG'),
-                      ),
-                    ],
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          label: const Text('All Items'),
+                          selected: selectedCategory == 'ALL',
+                          onSelected: (_) => setModalState(() => selectedCategory = 'ALL'),
+                        ),
+                        const SizedBox(width: 6),
+                        ChoiceChip(
+                          label: const Text('Rice (അരി - ₹9)'),
+                          selected: selectedCategory == 'RICE',
+                          onSelected: (_) => setModalState(() => selectedCategory = 'RICE'),
+                        ),
+                        const SizedBox(width: 6),
+                        ChoiceChip(
+                          label: const Text('Provision (₹8)'),
+                          selected: selectedCategory == 'PROVISION',
+                          onSelected: (_) => setModalState(() => selectedCategory = 'PROVISION'),
+                        ),
+                        const SizedBox(width: 6),
+                        ChoiceChip(
+                          label: const Text('Bags'),
+                          selected: selectedCategory == 'BAG',
+                          onSelected: (_) => setModalState(() => selectedCategory == 'BAG'),
+                        ),
+                        const SizedBox(width: 6),
+                        ChoiceChip(
+                          label: const Text('KG'),
+                          selected: selectedCategory == 'KG',
+                          onSelected: (_) => setModalState(() => selectedCategory == 'KG'),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Expanded(
@@ -1408,6 +1559,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                         final item = filteredItems[idx];
                         final isTaxable = (item['TAXABLE OR NOT'] ?? '').toString().toUpperCase() == 'TAXABLE';
                         final tRate = item['TAX RATE'] ?? item['GST'] ?? 0;
+                        final cat = (item['CATEGORY'] ?? '').toString();
                         return ListTile(
                           title: Row(
                             children: [
@@ -1421,7 +1573,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                             ],
                           ),
                           trailing: Text('₹${item['RATE']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF), fontSize: 15)),
-                          subtitle: Text(item['RATE PER KG/BAG'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          subtitle: Text("${item['RATE PER KG/BAG'] ?? ''} ${cat.isNotEmpty ? "• $cat" : ""}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
                           onTap: () {
                             Navigator.pop(ctx);
                             _promptItemEntry(item);
@@ -1454,6 +1606,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
     final isTaxable = (item['TAXABLE OR NOT'] ?? '').toString().toUpperCase() == 'TAXABLE';
     final double defaultTax = isTaxable ? (double.tryParse((item['TAX RATE'] ?? item['GST'] ?? '5').toString()) ?? 5.0) : 0.0;
     double taxRate = existing != null ? ((existing['taxRate'] as num?)?.toDouble() ?? 0.0) : defaultTax;
+    String category = existing != null ? (existing['category'] ?? '') : (item['CATEGORY'] ?? item['CAT'] ?? '');
 
     showDialog(
       context: context,
@@ -1514,7 +1667,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                 TextField(
                   controller: rateController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Rate (₹)', isDense: true),
+                  decoration: const InputDecoration(labelText: 'Rate (₹) [Inclusive Tax]', isDense: true),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -1541,6 +1694,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     'unit': selectedUnit,
                     'bag': bag,
                     'taxRate': taxRate,
+                    'category': category,
                     'total': qty * rate,
                   };
                   if (isEdit) {
@@ -1625,7 +1779,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                         pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Item Description', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
                         pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Qty / Unit', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
                         pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Bags', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Rate', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Rate (Incl)', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
                         pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Amount', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
                       ],
                     ),
@@ -1652,13 +1806,13 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
                       children: [
-                        pw.Text('Sub Total: INR ${subTotal.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                        pw.Text('Taxable Value: INR ${subTotal.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
                         if (cgst > 0) pw.Text('CGST: INR ${cgst.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
                         if (sgst > 0) pw.Text('SGST: INR ${sgst.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
-                        if (coolie > 0) pw.Text('Labour / Coolie: INR ${coolie.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                        if (coolie > 0) pw.Text('Coolie / Labour: INR ${coolie.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
                         if (roundOff != 0) pw.Text('Round Off: ${roundOff > 0 ? "+" : ""}${roundOff.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
                         pw.SizedBox(height: 4),
-                        pw.Text('Grand Total: INR ${total.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Net Payable: INR ${total.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
                       ],
                     ),
                   ],
@@ -1690,7 +1844,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                 pw.Spacer(),
                 pw.Divider(thickness: 0.5),
                 pw.Center(
-                  child: pw.Text('Generated via DC PRIME by S Tech | Thank you for your business!', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                  child: pw.Text('Generated via DC PRIME by S Tech | Rates are Inclusive of Tax', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
                 ),
               ],
             ),
@@ -1709,7 +1863,6 @@ class _EstimateScreenState extends State<EstimateScreen> {
     final now = DateTime.now();
     final date = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
 
-    // Encode full metadata in summary
     String summary = billItems.map((b) {
       final tRate = (b['taxRate'] as num?)?.toDouble() ?? 0.0;
       final taxStr = tRate > 0 ? " | Tax $tRate%" : "";
@@ -1718,7 +1871,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
 
     final coolie = double.tryParse(labourController.text) ?? 0.0;
     final total = roundedGrandTotal;
-    final sub = itemsSubTotal;
+    final taxable = totalTaxableValue;
     final cg = cgstAmount;
     final sg = sgstAmount;
     final roff = roundOffDifference;
@@ -1736,7 +1889,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
     });
     setState(() => isSaving = false);
 
-    _previewPdfDocument(estNo, date, selectedCustomer, List.from(billItems), total, pMode, coolie, sub, cg, sg, roff);
+    _previewPdfDocument(estNo, date, selectedCustomer, List.from(billItems), total, pMode, coolie, taxable, cg, sg, roff);
     setState(() {
       billItems.clear();
       selectedCustomer = '';
@@ -1865,10 +2018,10 @@ class _EstimateScreenState extends State<EstimateScreen> {
                           children: [
                             Expanded(child: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold))),
                             if (tRate > 0)
-                              Text('GST $tRate%', style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                              Text('GST $tRate% (Incl)', style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                           ],
                         ),
-                        subtitle: Text("${item['qty']} ${item['unit']} (Bags: ${item['bag']}) × ₹${item['rate']}"),
+                        subtitle: Text("${item['qty']} ${item['unit']} (${item['bag']} Bags) × ₹${item['rate']}"),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -1894,7 +2047,16 @@ class _EstimateScreenState extends State<EstimateScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Coolie / Labour Charge (₹):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                Row(
+                  children: [
+                    const Icon(Icons.local_shipping, size: 16, color: Colors.amberAccent),
+                    const SizedBox(width: 6),
+                    Text(
+                      widget.enableCategoryCoolie ? 'Coolie (Rice ₹${widget.riceCooliePerBag.toInt()} / Prov ₹${widget.provisionCooliePerBag.toInt()}):' : 'Coolie Charge (₹):',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ],
+                ),
                 SizedBox(
                   width: 80,
                   height: 35,
@@ -1923,8 +2085,8 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Tax: CGST ₹${cgstAmount.toStringAsFixed(2)} + SGST ₹${sgstAmount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                      Text('Round Off: ${roundOffDifference > 0 ? "+" : ""}${roundOffDifference.toStringAsFixed(2)}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                      Text('Tax Included: CGST ₹${cgstAmount.toStringAsFixed(2)} + SGST ₹${sgstAmount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                      Text('Taxable: ₹${totalTaxableValue.toStringAsFixed(2)}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
                     ],
                   ),
                 ),
@@ -2077,19 +2239,22 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
     final total = double.tryParse(est['TOTAL AMOUNT']?.toString() ?? '0') ?? 0.0;
     final pMode = (est['PAYMENT MODE'] ?? est['PAYMENT_MODE'] ?? est['PAYMENT'] ?? 'CASH').toString().toUpperCase();
 
-    double subTotal = 0.0;
-    double taxAmount = 0.0;
+    double inclusiveItemsSum = 0.0;
+    double taxableValueSum = 0.0;
     for (var it in parsed) {
       final amt = double.tryParse(it['total']?.toString() ?? '0') ?? 0.0;
-      subTotal += amt;
+      inclusiveItemsSum += amt;
       final tRate = (it['taxRate'] as num?)?.toDouble() ?? 0.0;
       if (tRate > 0) {
-        taxAmount += (amt * tRate) / 100.0;
+        taxableValueSum += amt / (1.0 + (tRate / 100.0));
+      } else {
+        taxableValueSum += amt;
       }
     }
-    double cgst = taxAmount / 2.0;
-    double sgst = taxAmount / 2.0;
-    double diff = total - (subTotal + taxAmount);
+    double totalTax = inclusiveItemsSum - taxableValueSum;
+    double cgst = totalTax / 2.0;
+    double sgst = totalTax / 2.0;
+    double diff = total - inclusiveItemsSum;
     double coolie = diff > 0 ? diff : 0.0;
 
     Navigator.push(
@@ -2145,7 +2310,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                                 pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Item Description', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
                                 pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Qty / Unit', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
                                 pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Bags', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Rate', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Rate (Incl)', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
                                 pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Amount', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
                               ],
                             ),
@@ -2172,12 +2337,12 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                             pw.Column(
                               crossAxisAlignment: pw.CrossAxisAlignment.end,
                               children: [
-                                pw.Text('Sub Total: INR ${subTotal.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                                pw.Text('Taxable Value: INR ${taxableValueSum.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
                                 if (cgst > 0) pw.Text('CGST: INR ${cgst.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
                                 if (sgst > 0) pw.Text('SGST: INR ${sgst.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
-                                if (coolie > 0) pw.Text('Labour / Coolie: INR ${coolie.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                                if (coolie > 0) pw.Text('Coolie / Labour: INR ${coolie.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
                                 pw.SizedBox(height: 4),
-                                pw.Text('Grand Total: INR ${total.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+                                pw.Text('Net Payable: INR ${total.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
                               ],
                             ),
                           ],
@@ -2211,14 +2376,16 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
 
     final parsed = _parseSummary(est['ITEMS SUMMARY'] ?? '');
     int count = 1;
-    double subTotal = 0;
-    double taxAmount = 0;
+    double inclusiveItemsSum = 0;
+    double taxableValueSum = 0;
     for (var it in parsed) {
       final amt = double.tryParse(it['total']?.toString() ?? '0') ?? 0.0;
-      subTotal += amt;
+      inclusiveItemsSum += amt;
       final tRate = (it['taxRate'] as num?)?.toDouble() ?? 0.0;
       if (tRate > 0) {
-        taxAmount += (amt * tRate) / 100.0;
+        taxableValueSum += amt / (1.0 + (tRate / 100.0));
+      } else {
+        taxableValueSum += amt;
       }
       final taxInfo = tRate > 0 ? " [GST $tRate%]" : "";
       sb.writeln("$count️⃣ *${it['name']}*$taxInfo");
@@ -2226,10 +2393,11 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
       count++;
     }
 
-    if (taxAmount > 0) {
+    double totalTax = inclusiveItemsSum - taxableValueSum;
+    if (totalTax > 0) {
       sb.writeln("──────────────────────");
-      sb.writeln("🏛️ *CGST:* ₹${(taxAmount / 2).toStringAsFixed(2)}");
-      sb.writeln("🏛️ *SGST:* ₹${(taxAmount / 2).toStringAsFixed(2)}");
+      sb.writeln("🏛️ *CGST:* ₹${(totalTax / 2).toStringAsFixed(2)}");
+      sb.writeln("🏛️ *SGST:* ₹${(totalTax / 2).toStringAsFixed(2)}");
     }
 
     sb.writeln("──────────────────────");
@@ -2338,7 +2506,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                                   if (tRate > 0)
                                     Padding(
                                       padding: const EdgeInsets.only(left: 6.0),
-                                      child: Text('$tRate% GST', style: const TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      child: Text('$tRate% GST (Incl)', style: const TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                                     ),
                                 ],
                               ),
@@ -2574,8 +2742,9 @@ class _PriceListTabState extends State<PriceListTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildDetailRow('Item Name', item['ITEM NAME']),
-            _buildDetailRow('Rate', '₹${item['RATE']}'),
+            _buildDetailRow('Rate (Incl Tax)', '₹${item['RATE']}'),
             _buildDetailRow('Rate Per', item['RATE PER KG/BAG']),
+            _buildDetailRow('Category', item['CATEGORY'] ?? 'Not set'),
             _buildDetailRow('Taxable Status', item['TAXABLE OR NOT'] ?? 'NON TAXABLE'),
             _buildDetailRow('GST Rate', '${item['TAX RATE'] ?? item['GST'] ?? 0}%'),
             _buildDetailRow('Tally Name', item['NAME OF ITEM IN TALLY'] ?? item['ITEM NAME ON TALLY']),
@@ -2632,6 +2801,11 @@ class _PriceListTabState extends State<PriceListTab> {
       }
     }
 
+    String selectedCategory = (existing?['CATEGORY'] ?? 'RICE').toString().toUpperCase();
+    if (!['RICE', 'PROVISION'].contains(selectedCategory)) {
+      selectedCategory = 'RICE';
+    }
+
     bool isTaxable = (existing?['TAXABLE OR NOT'] ?? '').toString().toUpperCase() == 'TAXABLE';
 
     showDialog(
@@ -2653,32 +2827,54 @@ class _PriceListTabState extends State<PriceListTab> {
                 TextField(
                   controller: rateCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Rate (₹) *'),
+                  decoration: const InputDecoration(labelText: 'Rate (₹) [Inclusive Tax] *'),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: selectedRateType,
-                  decoration: const InputDecoration(
-                    labelText: 'Rate Per (Unit) *',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'BAG', child: Text('BAG (ചാക്ക്)')),
-                    DropdownMenuItem(value: 'KG', child: Text('KG (കിലോ)')),
-                    DropdownMenuItem(value: 'NOS', child: Text('NOS (എണ്ണം)')),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: selectedRateType,
+                        decoration: const InputDecoration(
+                          labelText: 'Unit *',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'BAG', child: Text('BAG')),
+                          DropdownMenuItem(value: 'KG', child: Text('KG')),
+                          DropdownMenuItem(value: 'NOS', child: Text('NOS')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setDlgState(() => selectedRateType = val);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: selectedCategory,
+                        decoration: const InputDecoration(
+                          labelText: 'Category *',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'RICE', child: Text('RICE (₹9)')),
+                          DropdownMenuItem(value: 'PROVISION', child: Text('PROV (₹8)')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setDlgState(() => selectedCategory = val);
+                        },
+                      ),
+                    ),
                   ],
-                  onChanged: (val) {
-                    if (val != null) {
-                      setDlgState(() => selectedRateType = val);
-                    }
-                  },
                 ),
                 const SizedBox(height: 8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Taxable Item'),
-                  subtitle: Text(isTaxable ? 'GST will be applied' : 'Non-taxable goods'),
+                  subtitle: Text(isTaxable ? 'Inclusive GST rate' : 'Non-taxable goods'),
                   value: isTaxable,
                   activeColor: const Color(0xFF2979FF),
                   onChanged: (val) => setDlgState(() => isTaxable = val),
@@ -2708,6 +2904,7 @@ class _PriceListTabState extends State<PriceListTab> {
                 final payload = {
                   'ITEM NAME': nameCtrl.text.trim().toUpperCase(),
                   'RATE PER KG/BAG': selectedRateType,
+                  'CATEGORY': selectedCategory,
                   'RATE': double.tryParse(rateCtrl.text) ?? 0,
                   'TAXABLE OR NOT': isTaxable ? 'TAXABLE' : 'NON TAXABLE',
                   'TAX RATE': isTaxable ? (double.tryParse(taxRateCtrl.text) ?? 5.0) : 0,
@@ -2735,10 +2932,13 @@ class _PriceListTabState extends State<PriceListTab> {
       final it = raw as Map<String, dynamic>;
       final name = (it['ITEM NAME'] ?? '').toString().toLowerCase();
       final unit = (it['RATE PER KG/BAG'] ?? '').toString().toUpperCase();
+      final cat = (it['CATEGORY'] ?? '').toString().toUpperCase();
       final q = searchQuery.toLowerCase();
       final matchesQuery = name.contains(q);
       if (categoryFilter == 'BAG') return matchesQuery && unit.contains('BAG');
       if (categoryFilter == 'KG') return matchesQuery && unit.contains('KG');
+      if (categoryFilter == 'RICE') return matchesQuery && (cat.contains('RICE') || name.contains('RICE') || name.contains('VADI') || name.contains('JAYA'));
+      if (categoryFilter == 'PROVISION') return matchesQuery && (cat.contains('PROVISION') || (!cat.contains('RICE') && !name.contains('RICE') && !name.contains('VADI')));
       return matchesQuery;
     }).toList();
 
@@ -2765,18 +2965,42 @@ class _PriceListTabState extends State<PriceListTab> {
               ),
             ),
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: ['ALL', 'BAG', 'KG'].map((c) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4.0),
-              child: ChoiceChip(
-                label: Text(c == 'ALL' ? 'All' : (c == 'BAG' ? 'Bags' : 'KG')),
-                selected: categoryFilter == c,
-                onSelected: (val) {
-                  if (val) setState(() => categoryFilter = c);
-                },
-              ),
-            )).toList(),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: const Text('All Items'),
+                  selected: categoryFilter == 'ALL',
+                  onSelected: (_) => setState(() => categoryFilter = 'ALL'),
+                ),
+                const SizedBox(width: 6),
+                ChoiceChip(
+                  label: const Text('Rice (അരി - ₹9)'),
+                  selected: categoryFilter == 'RICE',
+                  onSelected: (_) => setState(() => categoryFilter = 'RICE'),
+                ),
+                const SizedBox(width: 6),
+                ChoiceChip(
+                  label: const Text('Provision (₹8)'),
+                  selected: categoryFilter == 'PROVISION',
+                  onSelected: (_) => setState(() => categoryFilter = 'PROVISION'),
+                ),
+                const SizedBox(width: 6),
+                ChoiceChip(
+                  label: const Text('Bags'),
+                  selected: categoryFilter == 'BAG',
+                  onSelected: (_) => setState(() => categoryFilter = 'BAG'),
+                ),
+                const SizedBox(width: 6),
+                ChoiceChip(
+                  label: const Text('KG'),
+                  selected: categoryFilter == 'KG',
+                  onSelected: (_) => setState(() => categoryFilter = 'KG'),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
           Expanded(
@@ -2787,6 +3011,7 @@ class _PriceListTabState extends State<PriceListTab> {
                 final it = filtered[idx] as Map<String, dynamic>;
                 final isTaxable = (it['TAXABLE OR NOT'] ?? '').toString().toUpperCase() == 'TAXABLE';
                 final tRate = it['TAX RATE'] ?? it['GST'] ?? 0;
+                final cat = (it['CATEGORY'] ?? '').toString();
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
@@ -2802,7 +3027,7 @@ class _PriceListTabState extends State<PriceListTab> {
                           ),
                       ],
                     ),
-                    subtitle: Text("${it['RATE PER KG/BAG'] ?? ''}\nTap for details", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    subtitle: Text("${it['RATE PER KG/BAG'] ?? ''} ${cat.isNotEmpty ? "• $cat" : ""}\nTap for details", style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
