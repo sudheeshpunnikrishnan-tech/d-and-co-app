@@ -241,7 +241,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   String companyName = 'DAVIS & COMPANY';
   String companyLocation = 'ALUVA, ERNAKULAM';
-  final String appVersion = '1.1.9';
+  final String appVersion = '1.2.0';
 
   bool askSaveConfirmation = true;
   bool enableLabourCharge = true;
@@ -1011,7 +1011,7 @@ class EstimateScreen extends StatefulWidget {
   final bool enableCategoryCoolie;
   final double riceCooliePerBag;
   final double provisionCooliePerBag;
-  final bool showUpiQr;
+  final showUpiQr;
   final String upiId;
   final VoidCallback onClearEdit;
   final Future<bool> Function(Map<String, dynamic>) onSaveEstimate;
@@ -1878,7 +1878,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
-                          mainAxisAlignment: dynamic,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Flexible(
                               child: Text(
@@ -2418,7 +2418,6 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                 ],
               ),
               const SizedBox(height: 8),
-              // Customer Name & Payment Badge with overflow fix
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -2508,7 +2507,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10)),
-                      icon: const Icon(Icons.picture_as_pdf, size: 14),
+                      icon: const Icon(Icons.picture_as_pdf, size: 15),
                       label: const Text('View PDF', style: TextStyle(fontSize: 12)),
                       onPressed: () {
                         Navigator.pop(ctx);
@@ -2520,7 +2519,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10)),
-                      icon: const Icon(Icons.share, size: 14),
+                      icon: const Icon(Icons.share, size: 15),
                       label: const Text('WhatsApp', style: TextStyle(fontSize: 12)),
                       onPressed: () {
                         Navigator.pop(ctx);
@@ -2635,7 +2634,6 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
               final est = filtered[idx] as Map<String, dynamic>;
               final pMode = (est['PAYMENT MODE'] ?? est['PAYMENT_MODE'] ?? est['PAYMENT'] ?? 'CASH').toString().toUpperCase();
               
-              // 2-Row Clean Layout with ample vertical spacing and wrapping
               return Card(
                 margin: const EdgeInsets.only(bottom: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -2647,7 +2645,6 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Row 1: Full customer name with badge
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -2677,7 +2674,6 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        // Row 2: Details, amount and buttons
                         Row(
                           children: [
                             Expanded(
