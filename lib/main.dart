@@ -240,7 +240,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   String companyName = 'DAVIS & COMPANY';
   String companyLocation = 'ALUVA, ERNAKULAM';
-  final String appVersion = '1.1.4';
+  final String appVersion = '1.1.6';
 
   bool askSaveConfirmation = true;
   bool enableLabourCharge = true;
@@ -1007,18 +1007,51 @@ class _EstimateScreenState extends State<EstimateScreen> {
       if (rawSummary.isNotEmpty) {
         final parts = rawSummary.split(', ');
         for (var p in parts) {
-          final match = RegExp(r'^(.*?)\s*\((\d+(?:\.\d+)?)\s*(KG|BAG)?\s*x\s*(\d+(?:\.\d+)?)\)$', caseSensitive: false).firstMatch(p.trim());
+          // Parse format: Name (Qty Unit, Bags B | Tax T% x Rate) or legacy
+          final match = RegExp(r'^(.*?)\s*\((.*?)\)$').firstMatch(p.trim());
           if (match != null) {
             final name = match.group(1)?.trim() ?? '';
-            final qty = double.tryParse(match.group(2) ?? '1') ?? 1.0;
-            final unit = match.group(3)?.toUpperCase() ?? 'KG';
-            final rate = double.tryParse(match.group(4) ?? '0') ?? 0.0;
+            final inner = match.group(2)?.trim() ?? '';
+
+            double qty = 1.0;
+            String unit = 'BAG';
+            double bag = 1.0;
+            double rate = 0.0;
+            double taxRate = 0.0;
+
+            final xParts = inner.split(' x ');
+            if (xParts.length == 2) {
+              rate = double.tryParse(xParts[1].trim()) ?? 0.0;
+              final leftParts = xParts[0].split('|');
+              final qtyUnitBag = leftParts[0].trim();
+              if (leftParts.length > 1 && leftParts[1].contains('Tax')) {
+                taxRate = double.tryParse(leftParts[1].replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+              }
+
+              final qubMatch = RegExp(r'(\d+(?:\.\d+)?)\s*(KG|BAG|NOS)?(?:\s*,\s*(\d+(?:\.\d+)?)\s*B)?').firstMatch(qtyUnitBag);
+              if (qubMatch != null) {
+                qty = double.tryParse(qubMatch.group(1) ?? '1') ?? 1.0;
+                unit = qubMatch.group(2) ?? 'BAG';
+                bag = double.tryParse(qubMatch.group(3) ?? '') ?? (unit == 'BAG' ? qty : 1.0);
+              }
+            } else {
+              // Legacy format check
+              final legacyMatch = RegExp(r'(\d+(?:\.\d+)?)\s*(KG|BAG|NOS)?\s*x\s*(\d+(?:\.\d+)?)').firstMatch(inner);
+              if (legacyMatch != null) {
+                qty = double.tryParse(legacyMatch.group(1) ?? '1') ?? 1.0;
+                unit = legacyMatch.group(2) ?? 'BAG';
+                rate = double.tryParse(legacyMatch.group(3) ?? '0') ?? 0.0;
+                bag = unit == 'BAG' ? qty : 1.0;
+              }
+            }
+
             billItems.add({
               'name': name,
               'rate': rate,
               'qty': qty,
               'unit': unit,
-              'bag': unit == 'BAG' ? qty : 1.0,
+              'bag': bag,
+              'taxRate': taxRate,
               'total': qty * rate,
             });
           }
@@ -1046,13 +1079,31 @@ class _EstimateScreenState extends State<EstimateScreen> {
     return sum;
   }
 
-  double get grandTotal {
-    double labour = double.tryParse(labourController.text) ?? 0.0;
-    return itemsSubTotal + labour;
+  double get totalTaxAmount {
+    double tax = 0;
+    for (var b in billItems) {
+      final tRate = (b['taxRate'] as num?)?.toDouble() ?? 0.0;
+      if (tRate > 0) {
+        final itemAmt = (b['total'] as num).toDouble();
+        tax += (itemAmt * tRate) / 100.0;
+      }
+    }
+    return tax;
   }
 
+  double get cgstAmount => totalTaxAmount / 2.0;
+  double get sgstAmount => totalTaxAmount / 2.0;
+
+  double get rawGrandTotal {
+    double labour = double.tryParse(labourController.text) ?? 0.0;
+    return itemsSubTotal + totalTaxAmount + labour;
+  }
+
+  double get roundedGrandTotal => rawGrandTotal.roundToDouble();
+  double get roundOffDifference => roundedGrandTotal - rawGrandTotal;
+
   String get upiQrUrl {
-    final amt = grandTotal.toStringAsFixed(2);
+    final amt = roundedGrandTotal.toStringAsFixed(2);
     final upiPayload = "upi://pay?pa=${widget.upiId}&pn=${Uri.encodeComponent(widget.companyName)}&am=$amt&cu=INR";
     final encoded = Uri.encodeComponent(upiPayload);
     return "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=$encoded";
@@ -1114,49 +1165,85 @@ class _EstimateScreenState extends State<EstimateScreen> {
   void _showAddItemInline() {
     final nameCtrl = TextEditingController();
     final rateCtrl = TextEditingController();
-    final rateTypeCtrl = TextEditingController(text: 'RATE PER KG');
+    final taxRateCtrl = TextEditingController(text: '5');
+    String selectedRateType = 'BAG';
+    bool isTaxable = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New Item'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              textCapitalization: TextCapitalization.characters,
-              inputFormatters: [UpperCaseTextFormatter()],
-              decoration: const InputDecoration(labelText: 'Item Name *'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => AlertDialog(
+          title: const Text('New Item'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [UpperCaseTextFormatter()],
+                  decoration: const InputDecoration(labelText: 'Item Name *'),
+                ),
+                TextField(
+                  controller: rateCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Rate (₹) *'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: selectedRateType,
+                  decoration: const InputDecoration(
+                    labelText: 'Rate Per (Unit) *',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'BAG', child: Text('BAG (ചാക്ക്)')),
+                    DropdownMenuItem(value: 'KG', child: Text('KG (കിലോ)')),
+                    DropdownMenuItem(value: 'NOS', child: Text('NOS (എണ്ണം)')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDlgState(() => selectedRateType = val);
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Taxable Item'),
+                  subtitle: Text(isTaxable ? 'GST will be applied' : 'Non-taxable goods'),
+                  value: isTaxable,
+                  activeColor: const Color(0xFF2979FF),
+                  onChanged: (val) => setDlgState(() => isTaxable = val),
+                ),
+                if (isTaxable)
+                  TextField(
+                    controller: taxRateCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'GST Rate % (e.g. 5, 12, 18)', isDense: true),
+                  ),
+              ],
             ),
-            TextField(
-              controller: rateCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Rate (₹) *'),
-            ),
-            TextField(
-              controller: rateTypeCtrl,
-              textCapitalization: TextCapitalization.characters,
-              inputFormatters: [UpperCaseTextFormatter()],
-              decoration: const InputDecoration(labelText: 'Rate Per (KG / BAG)'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameCtrl.text.trim().isEmpty) return;
+                Navigator.pop(ctx);
+                await widget.onAddItem({
+                  'ITEM NAME': nameCtrl.text.trim().toUpperCase(),
+                  'RATE PER KG/BAG': selectedRateType,
+                  'RATE': double.tryParse(rateCtrl.text) ?? 0,
+                  'TAXABLE OR NOT': isTaxable ? 'TAXABLE' : 'NON TAXABLE',
+                  'TAX RATE': isTaxable ? (double.tryParse(taxRateCtrl.text) ?? 5.0) : 0,
+                });
+              },
+              child: const Text('Save'),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameCtrl.text.trim().isEmpty) return;
-              Navigator.pop(ctx);
-              await widget.onAddItem({
-                'ITEM NAME': nameCtrl.text.trim().toUpperCase(),
-                'RATE PER KG/BAG': rateTypeCtrl.text.trim().toUpperCase(),
-                'RATE': double.tryParse(rateCtrl.text) ?? 0,
-              });
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }
@@ -1319,8 +1406,20 @@ class _EstimateScreenState extends State<EstimateScreen> {
                       itemCount: filteredItems.length,
                       itemBuilder: (context, idx) {
                         final item = filteredItems[idx];
+                        final isTaxable = (item['TAXABLE OR NOT'] ?? '').toString().toUpperCase() == 'TAXABLE';
+                        final tRate = item['TAX RATE'] ?? item['GST'] ?? 0;
                         return ListTile(
-                          title: Text(item['ITEM NAME'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
+                          title: Row(
+                            children: [
+                              Expanded(child: Text(item['ITEM NAME'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600))),
+                              if (isTaxable)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.18), borderRadius: BorderRadius.circular(4)),
+                                  child: Text('GST $tRate%', style: const TextStyle(fontSize: 10, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                ),
+                            ],
+                          ),
                           trailing: Text('₹${item['RATE']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF), fontSize: 15)),
                           subtitle: Text(item['RATE PER KG/BAG'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                           onTap: () {
@@ -1350,7 +1449,11 @@ class _EstimateScreenState extends State<EstimateScreen> {
 
     String selectedUnit = existing != null
         ? existing['unit']
-        : (item['RATE PER KG/BAG']?.toString().toUpperCase().contains('KG') == true ? 'KG' : 'BAG');
+        : (item['RATE PER KG/BAG']?.toString().toUpperCase().contains('KG') == true ? 'KG' : (item['RATE PER KG/BAG']?.toString().toUpperCase().contains('NOS') == true ? 'NOS' : 'BAG'));
+
+    final isTaxable = (item['TAXABLE OR NOT'] ?? '').toString().toUpperCase() == 'TAXABLE';
+    final double defaultTax = isTaxable ? (double.tryParse((item['TAX RATE'] ?? item['GST'] ?? '5').toString()) ?? 5.0) : 0.0;
+    double taxRate = existing != null ? ((existing['taxRate'] as num?)?.toDouble() ?? 0.0) : defaultTax;
 
     showDialog(
       context: context,
@@ -1372,13 +1475,22 @@ class _EstimateScreenState extends State<EstimateScreen> {
                         if (val) setDlgState(() => selectedUnit = 'KG');
                       },
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     ChoiceChip(
                       label: const Text('BAG (ചാക്ക്)'),
                       selected: selectedUnit == 'BAG',
                       selectedColor: const Color(0xFF2979FF),
                       onSelected: (val) {
                         if (val) setDlgState(() => selectedUnit = 'BAG');
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('NOS (എണ്ണം)'),
+                      selected: selectedUnit == 'NOS',
+                      selectedColor: const Color(0xFF2979FF),
+                      onSelected: (val) {
+                        if (val) setDlgState(() => selectedUnit = 'NOS');
                       },
                     ),
                   ],
@@ -1389,7 +1501,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   autofocus: true,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
-                    labelText: selectedUnit == 'KG' ? 'Weight in KG' : 'Quantity / Bags',
+                    labelText: selectedUnit == 'KG' ? 'Weight in KG' : 'Quantity',
                     isDense: true,
                   ),
                   onChanged: (val) {
@@ -1428,6 +1540,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     'qty': qty,
                     'unit': selectedUnit,
                     'bag': bag,
+                    'taxRate': taxRate,
                     'total': qty * rate,
                   };
                   if (isEdit) {
@@ -1448,20 +1561,22 @@ class _EstimateScreenState extends State<EstimateScreen> {
   }
 
   void _previewPdfDocument(String estNo, String date, String cust,
-      List<Map<String, dynamic>> items, double total, String pMode, double coolie) {
+      List<Map<String, dynamic>> items, double total, String pMode, double coolie,
+      double subTotal, double cgst, double sgst, double roundOff) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => PdfViewScreen(
           title: 'Invoice $estNo',
-          buildPdf: (format) => _buildPdfData(format, estNo, date, cust, items, total, pMode, coolie),
+          buildPdf: (format) => _buildPdfData(format, estNo, date, cust, items, total, pMode, coolie, subTotal, cgst, sgst, roundOff),
         ),
       ),
     );
   }
 
   Future<Uint8List> _buildPdfData(PdfPageFormat format, String estNo, String date, String cust,
-      List<Map<String, dynamic>> items, double total, String pMode, double coolie) async {
+      List<Map<String, dynamic>> items, double total, String pMode, double coolie,
+      double subTotal, double cgst, double sgst, double roundOff) async {
     final doc = pw.Document();
 
     doc.addPage(
@@ -1479,11 +1594,11 @@ class _EstimateScreenState extends State<EstimateScreen> {
                       pw.Text(widget.companyName, style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
                       pw.Text(widget.companyLocation, style: const pw.TextStyle(fontSize: 12)),
                       pw.SizedBox(height: 6),
-                      pw.Text('ESTIMATE INVOICE', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                      pw.Text('TAX / ESTIMATE INVOICE', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, letterSpacing: 1.2)),
                     ],
                   ),
                 ),
-                pw.Divider(),
+                pw.Divider(thickness: 1.2),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
@@ -1491,6 +1606,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     pw.Text('Date: $date'),
                   ],
                 ),
+                pw.SizedBox(height: 4),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
@@ -1505,20 +1621,23 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     pw.TableRow(
                       decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                       children: [
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('#')),
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Item Description')),
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Qty / Unit', textAlign: pw.TextAlign.right)),
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Rate', textAlign: pw.TextAlign.right)),
-                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Total', textAlign: pw.TextAlign.right)),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('#', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Item Description', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Qty / Unit', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Bags', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Rate', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Amount', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
                       ],
                     ),
                     ...items.asMap().entries.map((entry) {
                       var it = entry.value;
+                      final tRate = (it['taxRate'] as num?)?.toDouble() ?? 0.0;
                       return pw.TableRow(
                         children: [
                           pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${entry.key + 1}')),
-                          pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${it['name']}')),
+                          pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${it['name']} ${tRate > 0 ? "($tRate% GST)" : ""}')),
                           pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${it['qty']} ${it['unit']}', textAlign: pw.TextAlign.right)),
+                          pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${it['bag']}', textAlign: pw.TextAlign.right)),
                           pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${it['rate']}', textAlign: pw.TextAlign.right)),
                           pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${it['total']}', textAlign: pw.TextAlign.right)),
                         ],
@@ -1527,19 +1646,21 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   ],
                 ),
                 pw.SizedBox(height: 12),
-                if (coolie > 0)
-                  pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.end,
-                    children: [
-                      pw.Text('Coolie / Labour:  '),
-                      pw.Text('INR ${coolie.toStringAsFixed(2)}'),
-                    ],
-                  ),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.end,
                   children: [
-                    pw.Text('Grand Total:  ', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('INR ${total.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text('Sub Total: INR ${subTotal.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                        if (cgst > 0) pw.Text('CGST: INR ${cgst.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                        if (sgst > 0) pw.Text('SGST: INR ${sgst.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                        if (coolie > 0) pw.Text('Labour / Coolie: INR ${coolie.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                        if (roundOff != 0) pw.Text('Round Off: ${roundOff > 0 ? "+" : ""}${roundOff.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
+                        pw.SizedBox(height: 4),
+                        pw.Text('Grand Total: INR ${total.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+                      ],
+                    ),
                   ],
                 ),
                 if (widget.showUpiQr && widget.upiId.isNotEmpty) ...[
@@ -1566,6 +1687,11 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     ],
                   ),
                 ],
+                pw.Spacer(),
+                pw.Divider(thickness: 0.5),
+                pw.Center(
+                  child: pw.Text('Generated via DC PRIME by S Tech | Thank you for your business!', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                ),
               ],
             ),
           );
@@ -1582,9 +1708,20 @@ class _EstimateScreenState extends State<EstimateScreen> {
     final estNo = currentEditingEstNo ?? "EST-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}";
     final now = DateTime.now();
     final date = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-    String summary = billItems.map((b) => "${b['name']} (${b['qty']} ${b['unit']} x ${b['rate']})").join(", ");
+
+    // Encode full metadata in summary
+    String summary = billItems.map((b) {
+      final tRate = (b['taxRate'] as num?)?.toDouble() ?? 0.0;
+      final taxStr = tRate > 0 ? " | Tax $tRate%" : "";
+      return "${b['name']} (${b['qty']} ${b['unit']}, ${b['bag']} B$taxStr x ${b['rate']})";
+    }).join(", ");
+
     final coolie = double.tryParse(labourController.text) ?? 0.0;
-    final total = grandTotal;
+    final total = roundedGrandTotal;
+    final sub = itemsSubTotal;
+    final cg = cgstAmount;
+    final sg = sgstAmount;
+    final roff = roundOffDifference;
     final pMode = paymentMode;
 
     await widget.onSaveEstimate({
@@ -1599,7 +1736,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
     });
     setState(() => isSaving = false);
 
-    _previewPdfDocument(estNo, date, selectedCustomer, List.from(billItems), total, pMode, coolie);
+    _previewPdfDocument(estNo, date, selectedCustomer, List.from(billItems), total, pMode, coolie, sub, cg, sg, roff);
     setState(() {
       billItems.clear();
       selectedCustomer = '';
@@ -1701,7 +1838,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Scan & Pay via UPI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                        Text('₹${grandTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                        Text('₹${roundedGrandTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
                         Text(widget.upiId, style: const TextStyle(fontSize: 10, color: Colors.grey)),
                       ],
                     ),
@@ -1719,12 +1856,19 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   itemCount: billItems.length,
                   itemBuilder: (context, idx) {
                     final item = billItems[idx];
+                    final tRate = (item['taxRate'] as num?)?.toDouble() ?? 0.0;
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
                         onTap: () => _promptItemEntry({'ITEM NAME': item['name'], 'RATE': item['rate'], 'RATE PER KG/BAG': item['unit']}, idx),
-                        title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text("${item['qty']} ${item['unit']} × ₹${item['rate']} (Bags: ${item['bag']})"),
+                        title: Row(
+                          children: [
+                            Expanded(child: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold))),
+                            if (tRate > 0)
+                              Text('GST $tRate%', style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        subtitle: Text("${item['qty']} ${item['unit']} (Bags: ${item['bag']}) × ₹${item['rate']}"),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -1743,27 +1887,64 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   },
                 ),
         ),
+        if (widget.enableLabourCharge && billItems.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            color: Theme.of(context).cardTheme.color,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Coolie / Labour Charge (₹):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                SizedBox(
+                  width: 80,
+                  height: 35,
+                  child: TextField(
+                    controller: labourController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.end,
+                    decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.all(8), border: OutlineInputBorder()),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+              ],
+            ),
+          ),
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Theme.of(context).cardTheme.color,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              if (totalTaxAmount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Tax: CGST ₹${cgstAmount.toStringAsFixed(2)} + SGST ₹${sgstAmount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                      Text('Round Off: ${roundOffDifference > 0 ? "+" : ""}${roundOffDifference.toStringAsFixed(2)}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                    ],
+                  ),
+                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Grand Total', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                  Text('₹${grandTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Grand Total', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      Text('₹${roundedGrandTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                    ],
+                  ),
+                  ElevatedButton.icon(
+                    icon: isSaving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.visibility),
+                    label: Text(isSaving ? 'Saving...' : 'Save & View PDF'),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2E7D32), foregroundColor: Colors.white),
+                    onPressed: isSaving ? null : _saveEstimate,
+                  ),
                 ],
-              ),
-              ElevatedButton.icon(
-                icon: isSaving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.visibility),
-                label: Text(isSaving ? 'Saving...' : 'Save & View PDF'),
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2E7D32), foregroundColor: Colors.white),
-                onPressed: isSaving ? null : _saveEstimate,
               ),
             ],
           ),
@@ -1838,26 +2019,50 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
     if (summary.trim().isEmpty) return list;
     final parts = summary.split(', ');
     for (var p in parts) {
-      final match = RegExp(r'^(.*?)\s*\((\d+(?:\.\d+)?)\s*(KG|BAG)?\s*x\s*(\d+(?:\.\d+)?)\)$', caseSensitive: false).firstMatch(p.trim());
+      final match = RegExp(r'^(.*?)\s*\((.*?)\)$').firstMatch(p.trim());
       if (match != null) {
         final name = match.group(1)?.trim() ?? '';
-        final qty = double.tryParse(match.group(2) ?? '1') ?? 1.0;
-        final unit = match.group(3)?.toUpperCase() ?? 'KG';
-        final rate = double.tryParse(match.group(4) ?? '0') ?? 0.0;
+        final inner = match.group(2)?.trim() ?? '';
+
+        double qty = 1.0;
+        String unit = 'BAG';
+        double bag = 1.0;
+        double rate = 0.0;
+        double taxRate = 0.0;
+
+        final xParts = inner.split(' x ');
+        if (xParts.length == 2) {
+          rate = double.tryParse(xParts[1].trim()) ?? 0.0;
+          final leftParts = xParts[0].split('|');
+          final qtyUnitBag = leftParts[0].trim();
+          if (leftParts.length > 1 && leftParts[1].contains('Tax')) {
+            taxRate = double.tryParse(leftParts[1].replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+          }
+
+          final qubMatch = RegExp(r'(\d+(?:\.\d+)?)\s*(KG|BAG|NOS)?(?:\s*,\s*(\d+(?:\.\d+)?)\s*B)?').firstMatch(qtyUnitBag);
+          if (qubMatch != null) {
+            qty = double.tryParse(qubMatch.group(1) ?? '1') ?? 1.0;
+            unit = qubMatch.group(2) ?? 'BAG';
+            bag = double.tryParse(qubMatch.group(3) ?? '') ?? (unit == 'BAG' ? qty : 1.0);
+          }
+        } else {
+          final legacyMatch = RegExp(r'(\d+(?:\.\d+)?)\s*(KG|BAG|NOS)?\s*x\s*(\d+(?:\.\d+)?)').firstMatch(inner);
+          if (legacyMatch != null) {
+            qty = double.tryParse(legacyMatch.group(1) ?? '1') ?? 1.0;
+            unit = legacyMatch.group(2) ?? 'BAG';
+            rate = double.tryParse(legacyMatch.group(3) ?? '0') ?? 0.0;
+            bag = unit == 'BAG' ? qty : 1.0;
+          }
+        }
+
         list.add({
           'name': name,
           'qty': qty,
           'unit': unit,
+          'bag': bag,
           'rate': rate,
+          'taxRate': taxRate,
           'total': (qty * rate).toStringAsFixed(2),
-        });
-      } else {
-        list.add({
-          'name': p,
-          'qty': '',
-          'unit': '',
-          'rate': '',
-          'total': '',
         });
       }
     }
@@ -1871,6 +2076,21 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
     final cust = est['CUSTOMER NAME'] ?? 'Customer';
     final total = double.tryParse(est['TOTAL AMOUNT']?.toString() ?? '0') ?? 0.0;
     final pMode = (est['PAYMENT MODE'] ?? est['PAYMENT_MODE'] ?? est['PAYMENT'] ?? 'CASH').toString().toUpperCase();
+
+    double subTotal = 0.0;
+    double taxAmount = 0.0;
+    for (var it in parsed) {
+      final amt = double.tryParse(it['total']?.toString() ?? '0') ?? 0.0;
+      subTotal += amt;
+      final tRate = (it['taxRate'] as num?)?.toDouble() ?? 0.0;
+      if (tRate > 0) {
+        taxAmount += (amt * tRate) / 100.0;
+      }
+    }
+    double cgst = taxAmount / 2.0;
+    double sgst = taxAmount / 2.0;
+    double diff = total - (subTotal + taxAmount);
+    double coolie = diff > 0 ? diff : 0.0;
 
     Navigator.push(
       context,
@@ -1894,11 +2114,11 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                               pw.Text(widget.companyName, style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
                               pw.Text(widget.companyLocation, style: const pw.TextStyle(fontSize: 12)),
                               pw.SizedBox(height: 6),
-                              pw.Text('ESTIMATE INVOICE', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                              pw.Text('TAX / ESTIMATE INVOICE', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, letterSpacing: 1.2)),
                             ],
                           ),
                         ),
-                        pw.Divider(),
+                        pw.Divider(thickness: 1.2),
                         pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                           children: [
@@ -1906,6 +2126,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                             pw.Text('Date: $date'),
                           ],
                         ),
+                        pw.SizedBox(height: 4),
                         pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                           children: [
@@ -1920,20 +2141,23 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                             pw.TableRow(
                               decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                               children: [
-                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('#')),
-                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Item Description')),
-                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Qty / Unit', textAlign: pw.TextAlign.right)),
-                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Rate', textAlign: pw.TextAlign.right)),
-                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Total', textAlign: pw.TextAlign.right)),
+                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('#', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Item Description', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Qty / Unit', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Bags', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Rate', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+                                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Amount', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
                               ],
                             ),
                             ...parsed.asMap().entries.map((entry) {
                               var it = entry.value;
+                              final tRate = (it['taxRate'] as num?)?.toDouble() ?? 0.0;
                               return pw.TableRow(
                                 children: [
                                   pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${entry.key + 1}')),
-                                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${it['name']}')),
+                                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${it['name']} ${tRate > 0 ? "($tRate% GST)" : ""}')),
                                   pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${it['qty']} ${it['unit']}', textAlign: pw.TextAlign.right)),
+                                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${it['bag']}', textAlign: pw.TextAlign.right)),
                                   pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${it['rate']}', textAlign: pw.TextAlign.right)),
                                   pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('${it['total']}', textAlign: pw.TextAlign.right)),
                                 ],
@@ -1945,8 +2169,17 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                         pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.end,
                           children: [
-                            pw.Text('Grand Total:  ', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                            pw.Text('INR ${total.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                            pw.Column(
+                              crossAxisAlignment: pw.CrossAxisAlignment.end,
+                              children: [
+                                pw.Text('Sub Total: INR ${subTotal.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                                if (cgst > 0) pw.Text('CGST: INR ${cgst.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                                if (sgst > 0) pw.Text('SGST: INR ${sgst.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                                if (coolie > 0) pw.Text('Labour / Coolie: INR ${coolie.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                                pw.SizedBox(height: 4),
+                                pw.Text('Grand Total: INR ${total.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+                              ],
+                            ),
                           ],
                         ),
                       ],
@@ -1967,7 +2200,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
     sb.writeln("🧾 *${widget.companyName.toUpperCase()}*");
     sb.writeln("📍 *${widget.companyLocation}*");
     sb.writeln("──────────────────────");
-    sb.writeln("📋 *ESTIMATE INVOICE*");
+    sb.writeln("📋 *ESTIMATE / TAX INVOICE*");
     sb.writeln("🔢 *Est No:* ${est['ESTIMATE NO'] ?? '-'}");
     sb.writeln("📅 *Date:* ${_cleanDate(est['DATE'])}");
     sb.writeln("👤 *Customer:* ${est['CUSTOMER NAME'] ?? '-'}");
@@ -1978,13 +2211,25 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
 
     final parsed = _parseSummary(est['ITEMS SUMMARY'] ?? '');
     int count = 1;
+    double subTotal = 0;
+    double taxAmount = 0;
     for (var it in parsed) {
-      if (it['qty'].toString().isNotEmpty) {
-        sb.writeln("$count️⃣ *${it['name']}*\n   ▫️ ${it['qty']} ${it['unit']} × ₹${it['rate']} = *₹${it['total']}*");
-      } else {
-        sb.writeln("$count️⃣ ${it['name']}");
+      final amt = double.tryParse(it['total']?.toString() ?? '0') ?? 0.0;
+      subTotal += amt;
+      final tRate = (it['taxRate'] as num?)?.toDouble() ?? 0.0;
+      if (tRate > 0) {
+        taxAmount += (amt * tRate) / 100.0;
       }
+      final taxInfo = tRate > 0 ? " [GST $tRate%]" : "";
+      sb.writeln("$count️⃣ *${it['name']}*$taxInfo");
+      sb.writeln("   ▫️ ${it['qty']} ${it['unit']} (${it['bag']} Bags) × ₹${it['rate']} = *₹${it['total']}*");
       count++;
+    }
+
+    if (taxAmount > 0) {
+      sb.writeln("──────────────────────");
+      sb.writeln("🏛️ *CGST:* ₹${(taxAmount / 2).toStringAsFixed(2)}");
+      sb.writeln("🏛️ *SGST:* ₹${(taxAmount / 2).toStringAsFixed(2)}");
     }
 
     sb.writeln("──────────────────────");
@@ -2041,7 +2286,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                     Text(widget.companyName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
                     Text(widget.companyLocation, style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     const SizedBox(height: 6),
-                    const Text('ESTIMATE INVOICE', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                    const Text('ESTIMATE / TAX INVOICE', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1)),
                   ],
                 ),
               ),
@@ -2078,6 +2323,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   separatorBuilder: (_, __) => const Divider(height: 12),
                   itemBuilder: (context, idx) {
                     final item = parsedItems[idx];
+                    final tRate = (item['taxRate'] as num?)?.toDouble() ?? 0.0;
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -2086,14 +2332,21 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(item['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                              if (item['qty'].toString().isNotEmpty)
-                                Text('${item['qty']} ${item['unit']} × ₹${item['rate']}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                              Row(
+                                children: [
+                                  Text(item['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                                  if (tRate > 0)
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 6.0),
+                                      child: Text('$tRate% GST', style: const TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                    ),
+                                ],
+                              ),
+                              Text('${item['qty']} ${item['unit']} (${item['bag']} Bags) × ₹${item['rate']}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
                             ],
                           ),
                         ),
-                        if (item['total'].toString().isNotEmpty)
-                          Text('₹${item['total']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.greenAccent, fontSize: 13)),
+                        Text('₹${item['total']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.greenAccent, fontSize: 13)),
                       ],
                     );
                   },
@@ -2112,9 +2365,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                      ),
+                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10)),
                       icon: const Icon(Icons.edit, size: 15, color: Colors.orangeAccent),
                       label: const Text('Edit Bill', style: TextStyle(fontSize: 12, color: Colors.orangeAccent)),
                       onPressed: () {
@@ -2126,11 +2377,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10)),
                       icon: const Icon(Icons.picture_as_pdf, size: 15),
                       label: const Text('View PDF', style: TextStyle(fontSize: 12)),
                       onPressed: () {
@@ -2142,11 +2389,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF25D366),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10)),
                       icon: const Icon(Icons.share, size: 15),
                       label: const Text('WhatsApp', style: TextStyle(fontSize: 12)),
                       onPressed: () {
@@ -2333,9 +2576,9 @@ class _PriceListTabState extends State<PriceListTab> {
             _buildDetailRow('Item Name', item['ITEM NAME']),
             _buildDetailRow('Rate', '₹${item['RATE']}'),
             _buildDetailRow('Rate Per', item['RATE PER KG/BAG']),
-            _buildDetailRow('Tally Name', item['NAME OF ITEM IN TALLY'] ?? item['ITEM NAME ON TALLY']),
-            _buildDetailRow('Billed In', item['BILLED IN'] ?? 'KILOGRAM'),
             _buildDetailRow('Taxable Status', item['TAXABLE OR NOT'] ?? 'NON TAXABLE'),
+            _buildDetailRow('GST Rate', '${item['TAX RATE'] ?? item['GST'] ?? 0}%'),
+            _buildDetailRow('Tally Name', item['NAME OF ITEM IN TALLY'] ?? item['ITEM NAME ON TALLY']),
           ],
         ),
         actions: [
@@ -2376,66 +2619,112 @@ class _PriceListTabState extends State<PriceListTab> {
     final nameCtrl = TextEditingController(text: existing?['ITEM NAME'] ?? '');
     final rateCtrl = TextEditingController(text: existing?['RATE']?.toString() ?? '');
     final tallyCtrl = TextEditingController(text: existing?['NAME OF ITEM IN TALLY'] ?? existing?['ITEM NAME ON TALLY'] ?? '');
-    final rateTypeCtrl = TextEditingController(text: existing?['RATE PER KG/BAG'] ?? 'RATE PER KG');
+    final taxRateCtrl = TextEditingController(text: (existing?['TAX RATE'] ?? existing?['GST'] ?? '5').toString());
+
+    String selectedRateType = existing?['RATE PER KG/BAG']?.toString().toUpperCase() ?? 'BAG';
+    if (!['BAG', 'KG', 'NOS'].contains(selectedRateType)) {
+      if (selectedRateType.contains('KG')) {
+        selectedRateType = 'KG';
+      } else if (selectedRateType.contains('NOS') || selectedRateType.contains('NO')) {
+        selectedRateType = 'NOS';
+      } else {
+        selectedRateType = 'BAG';
+      }
+    }
+
+    bool isTaxable = (existing?['TAXABLE OR NOT'] ?? '').toString().toUpperCase() == 'TAXABLE';
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(existing == null ? 'Add New Item' : 'Edit Item'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                enabled: existing == null,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [UpperCaseTextFormatter()],
-                decoration: const InputDecoration(labelText: 'Item Name *'),
-              ),
-              TextField(
-                controller: rateCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Rate (₹) *'),
-              ),
-              TextField(
-                controller: tallyCtrl,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [UpperCaseTextFormatter()],
-                decoration: const InputDecoration(labelText: 'Name on Tally'),
-              ),
-              TextField(
-                controller: rateTypeCtrl,
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [UpperCaseTextFormatter()],
-                decoration: const InputDecoration(labelText: 'Rate Per (KG / BAG)'),
-              ),
-            ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => AlertDialog(
+          title: Text(existing == null ? 'Add New Item' : 'Edit Item'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  enabled: existing == null,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [UpperCaseTextFormatter()],
+                  decoration: const InputDecoration(labelText: 'Item Name *'),
+                ),
+                TextField(
+                  controller: rateCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Rate (₹) *'),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: selectedRateType,
+                  decoration: const InputDecoration(
+                    labelText: 'Rate Per (Unit) *',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'BAG', child: Text('BAG (ചാക്ക്)')),
+                    DropdownMenuItem(value: 'KG', child: Text('KG (കിലോ)')),
+                    DropdownMenuItem(value: 'NOS', child: Text('NOS (എണ്ണം)')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDlgState(() => selectedRateType = val);
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Taxable Item'),
+                  subtitle: Text(isTaxable ? 'GST will be applied' : 'Non-taxable goods'),
+                  value: isTaxable,
+                  activeColor: const Color(0xFF2979FF),
+                  onChanged: (val) => setDlgState(() => isTaxable = val),
+                ),
+                if (isTaxable)
+                  TextField(
+                    controller: taxRateCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'GST Rate % (e.g. 5, 12, 18)', isDense: true),
+                  ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: tallyCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [UpperCaseTextFormatter()],
+                  decoration: const InputDecoration(labelText: 'Name on Tally'),
+                ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameCtrl.text.trim().isEmpty) return;
-              Navigator.pop(ctx);
-              final payload = {
-                'ITEM NAME': nameCtrl.text.trim().toUpperCase(),
-                'RATE PER KG/BAG': rateTypeCtrl.text.trim().toUpperCase(),
-                'RATE': double.tryParse(rateCtrl.text) ?? 0,
-                'NAME OF ITEM IN TALLY': tallyCtrl.text.trim().toUpperCase(),
-                'ITEM NAME ON TALLY': tallyCtrl.text.trim().toUpperCase(),
-              };
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameCtrl.text.trim().isEmpty) return;
+                Navigator.pop(ctx);
+                final payload = {
+                  'ITEM NAME': nameCtrl.text.trim().toUpperCase(),
+                  'RATE PER KG/BAG': selectedRateType,
+                  'RATE': double.tryParse(rateCtrl.text) ?? 0,
+                  'TAXABLE OR NOT': isTaxable ? 'TAXABLE' : 'NON TAXABLE',
+                  'TAX RATE': isTaxable ? (double.tryParse(taxRateCtrl.text) ?? 5.0) : 0,
+                  'NAME OF ITEM IN TALLY': tallyCtrl.text.trim().toUpperCase(),
+                  'ITEM NAME ON TALLY': tallyCtrl.text.trim().toUpperCase(),
+                };
 
-              if (existing == null) {
-                if (widget.onAddItem != null) await widget.onAddItem!(payload);
-              } else {
-                if (widget.onEditItem != null) await widget.onEditItem!(existing['ITEM NAME'], payload);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
+                if (existing == null) {
+                  if (widget.onAddItem != null) await widget.onAddItem!(payload);
+                } else {
+                  if (widget.onEditItem != null) await widget.onEditItem!(existing['ITEM NAME'], payload);
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2496,11 +2785,23 @@ class _PriceListTabState extends State<PriceListTab> {
               itemCount: filtered.length,
               itemBuilder: (context, idx) {
                 final it = filtered[idx] as Map<String, dynamic>;
+                final isTaxable = (it['TAXABLE OR NOT'] ?? '').toString().toUpperCase() == 'TAXABLE';
+                final tRate = it['TAX RATE'] ?? it['GST'] ?? 0;
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
                     onTap: () => _showItemDetailModal(it),
-                    title: Text(it['ITEM NAME'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    title: Row(
+                      children: [
+                        Expanded(child: Text(it['ITEM NAME'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold))),
+                        if (isTaxable)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.18), borderRadius: BorderRadius.circular(4)),
+                            child: Text('GST $tRate%', style: const TextStyle(fontSize: 10, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                          ),
+                      ],
+                    ),
                     subtitle: Text("${it['RATE PER KG/BAG'] ?? ''}\nTap for details", style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
