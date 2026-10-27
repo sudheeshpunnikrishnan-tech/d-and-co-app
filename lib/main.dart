@@ -239,7 +239,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   String companyName = 'DAVIS & COMPANY';
   String companyLocation = 'ALUVA, ERNAKULAM';
-  final String appVersion = '1.0.8';
+  final String appVersion = '1.0.9';
 
   bool askSaveConfirmation = true;
   bool enableLabourCharge = true;
@@ -776,7 +776,8 @@ class DashboardHomeScreen extends StatelessWidget {
           final amt = double.tryParse(est['TOTAL AMOUNT']?.toString() ?? '0') ?? 0.0;
           todaySales += amt;
           todayBills++;
-          if (est['PAYMENT MODE'] == 'CREDIT') {
+          final pMode = (est['PAYMENT MODE'] ?? est['PAYMENT_MODE'] ?? est['PAYMENT'] ?? 'CASH').toString().toUpperCase();
+          if (pMode == 'CREDIT') {
             todayCredit += amt;
           }
         }
@@ -919,7 +920,6 @@ class DashboardHomeScreen extends StatelessWidget {
           ),
           ...estimates.reversed.take(4).map((est) {
             final e = est as Map<String, dynamic>;
-            final pMode = e['PAYMENT MODE'] ?? 'CASH';
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
@@ -1073,7 +1073,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
       final inv = widget.invoiceToEdit!;
       selectedCustomer = inv['CUSTOMER NAME'] ?? '';
       currentEditingEstNo = inv['ESTIMATE NO'] ?? '';
-      paymentMode = inv['PAYMENT MODE'] ?? 'CASH';
+      paymentMode = (inv['PAYMENT MODE'] ?? inv['PAYMENT_MODE'] ?? inv['PAYMENT'] ?? 'CASH').toString().toUpperCase();
       billItems.clear();
 
       String rawSummary = inv['ITEMS SUMMARY'] ?? '';
@@ -1143,6 +1143,13 @@ class _EstimateScreenState extends State<EstimateScreen> {
   double get grandTotal {
     double labour = double.tryParse(labourController.text) ?? 0.0;
     return itemsSubTotal + labour;
+  }
+
+  String get upiQrUrl {
+    final amt = grandTotal.toStringAsFixed(2);
+    final upiPayload = "upi://pay?pa=${widget.upiId}&pn=${Uri.encodeComponent(widget.companyName)}&am=$amt&cu=INR";
+    final encoded = Uri.encodeComponent(upiPayload);
+    return "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=$encoded";
   }
 
   void _editBillItem(int index) {
@@ -1440,81 +1447,115 @@ class _EstimateScreenState extends State<EstimateScreen> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Center(
+        title: Center(
           child: Column(
             children: [
-              Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 48),
-              SizedBox(height: 8),
-              Text('Invoice Saved!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 44),
+              const SizedBox(height: 6),
+              const Text('Invoice Saved!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text('Payment Mode: $pMode', style: TextStyle(fontSize: 12, color: pMode == 'CREDIT' ? Colors.orangeAccent : Colors.greenAccent, fontWeight: FontWeight.bold)),
             ],
           ),
         ),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 8.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              InkWell(
-                borderRadius: BorderRadius.circular(50),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  setState(() {
-                    billItems.clear();
-                    selectedCustomer = '';
-                    currentEditingEstNo = null;
-                    labourController.text = '0';
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(14),
+              if (pMode == 'UPI' && widget.showUpiQr) ...[
+                Container(
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.2),
-                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.check, color: Colors.greenAccent, size: 28),
-                ),
-              ),
-              InkWell(
-                borderRadius: BorderRadius.circular(50),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _generatePdfInvoice(estNo, date, cust, items, total, pMode, coolie);
-                  setState(() {
-                    billItems.clear();
-                    selectedCustomer = '';
-                    currentEditingEstNo = null;
-                    labourController.text = '0';
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.redAccent.withOpacity(0.15),
-                    shape: BoxShape.circle,
+                  child: Image.network(
+                    upiQrUrl,
+                    width: 150,
+                    height: 150,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Column(
+                      children: [
+                        Icon(Icons.qr_code, size: 50, color: Colors.black54),
+                        Text('QR Code unavailable', style: TextStyle(color: Colors.black54, fontSize: 11)),
+                      ],
+                    ),
                   ),
-                  child: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 28),
                 ),
-              ),
-              InkWell(
-                borderRadius: BorderRadius.circular(50),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _shareViaWhatsApp(estNo, date, cust, items, total, pMode, coolie);
-                  setState(() {
-                    billItems.clear();
-                    selectedCustomer = '';
-                    currentEditingEstNo = null;
-                    labourController.text = '0';
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF25D366),
-                    shape: BoxShape.circle,
+                const SizedBox(height: 8),
+                Text('Scan & Pay ₹${total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                Text('UPI ID: ${widget.upiId}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 16),
+              ],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  InkWell(
+                    borderRadius: BorderRadius.circular(50),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      setState(() {
+                        billItems.clear();
+                        selectedCustomer = '';
+                        currentEditingEstNo = null;
+                        labourController.text = '0';
+                        paymentMode = 'CASH';
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check, color: Colors.greenAccent, size: 28),
+                    ),
                   ),
-                  child: const Icon(Icons.share, color: Colors.white, size: 28),
-                ),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(50),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _generatePdfInvoice(estNo, date, cust, items, total, pMode, coolie);
+                      setState(() {
+                        billItems.clear();
+                        selectedCustomer = '';
+                        currentEditingEstNo = null;
+                        labourController.text = '0';
+                        paymentMode = 'CASH';
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 28),
+                    ),
+                  ),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(50),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _shareViaWhatsApp(estNo, date, cust, items, total, pMode, coolie);
+                      setState(() {
+                        billItems.clear();
+                        selectedCustomer = '';
+                        currentEditingEstNo = null;
+                        labourController.text = '0';
+                        paymentMode = 'CASH';
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF25D366),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.share, color: Colors.white, size: 28),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1943,6 +1984,8 @@ class _EstimateScreenState extends State<EstimateScreen> {
       'ITEMS SUMMARY': summary,
       'TOTAL AMOUNT': currentTotal,
       'PAYMENT MODE': pMode,
+      'PAYMENT_MODE': pMode,
+      'PAYMENT': pMode,
     };
 
     await widget.onSaveEstimate(estData);
@@ -2025,6 +2068,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                     billItems.clear();
                     selectedCustomer = '';
                     labourController.text = '0';
+                    paymentMode = 'CASH';
                   }),
                 ),
               ],
@@ -2103,26 +2147,63 @@ class _EstimateScreenState extends State<EstimateScreen> {
                         label: const Text('CASH', style: TextStyle(fontSize: 11)),
                         selected: paymentMode == 'CASH',
                         selectedColor: const Color(0xFF2E7D32),
-                        onSelected: (val) => setState(() => paymentMode = 'CASH'),
+                        onSelected: (val) {
+                          if (val) setState(() => paymentMode = 'CASH');
+                        },
                       ),
                       const SizedBox(width: 6),
                       ChoiceChip(
                         label: const Text('CREDIT', style: TextStyle(fontSize: 11)),
                         selected: paymentMode == 'CREDIT',
                         selectedColor: Colors.orange.shade800,
-                        onSelected: (val) => setState(() => paymentMode = 'CREDIT'),
+                        onSelected: (val) {
+                          if (val) setState(() => paymentMode = 'CREDIT');
+                        },
                       ),
                       const SizedBox(width: 6),
                       ChoiceChip(
                         label: const Text('UPI', style: TextStyle(fontSize: 11)),
                         selected: paymentMode == 'UPI',
                         selectedColor: const Color(0xFF2979FF),
-                        onSelected: (val) => setState(() => paymentMode = 'UPI'),
+                        onSelected: (val) {
+                          if (val) setState(() => paymentMode = 'UPI');
+                        },
                       ),
                     ],
                   ),
                 ],
               ),
+              if (paymentMode == 'UPI' && widget.showUpiQr && billItems.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Image.network(
+                        upiQrUrl,
+                        width: 75,
+                        height: 75,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.qr_code, size: 50, color: Colors.black54),
+                      ),
+                      const SizedBox(width: 14),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('UPI QR Ready', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 13)),
+                          Text('Scan to pay ₹${grandTotal.toStringAsFixed(2)}', style: const TextStyle(color: Colors.black54, fontSize: 11)),
+                          Text(widget.upiId, style: const TextStyle(color: Color(0xFF1E88E5), fontWeight: FontWeight.w600, fontSize: 11)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -2563,9 +2644,8 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
     sb.writeln("🔢 *Est No:* ${est['ESTIMATE NO'] ?? '-'}");
     sb.writeln("📅 *Date:* ${_cleanDate(est['DATE'])}");
     sb.writeln("👤 *Customer:* ${est['CUSTOMER NAME'] ?? '-'}");
-    if (est['PAYMENT MODE'] != null) {
-      sb.writeln("💳 *Payment:* ${est['PAYMENT MODE']}");
-    }
+    final pMode = (est['PAYMENT MODE'] ?? est['PAYMENT_MODE'] ?? est['PAYMENT'] ?? 'CASH').toString().toUpperCase();
+    sb.writeln("💳 *Payment:* $pMode");
     sb.writeln("──────────────────────");
     sb.writeln("📦 *ITEMS LIST:*");
 
@@ -2616,6 +2696,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
 
   void _viewInvoiceDetails(Map<String, dynamic> est) {
     final parsedItems = _parseSummary(est['ITEMS SUMMARY'] ?? '');
+    final pMode = (est['PAYMENT MODE'] ?? est['PAYMENT_MODE'] ?? est['PAYMENT'] ?? 'CASH').toString().toUpperCase();
 
     showDialog(
       context: context,
@@ -2657,14 +2738,14 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: (est['PAYMENT MODE'] == 'CREDIT' ? Colors.orange : Colors.green).withOpacity(0.2),
+                      color: (pMode == 'CREDIT' ? Colors.orange : (pMode == 'UPI' ? Colors.blue : Colors.green)).withOpacity(0.2),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Text(est['PAYMENT MODE'] ?? 'CASH',
+                    child: Text(pMode,
                         style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: est['PAYMENT MODE'] == 'CREDIT' ? Colors.orangeAccent : Colors.greenAccent)),
+                            color: pMode == 'CREDIT' ? Colors.orangeAccent : (pMode == 'UPI' ? Colors.lightBlueAccent : Colors.greenAccent))),
                   ),
                 ],
               ),
@@ -2805,7 +2886,6 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final reversedList = widget.estimates.reversed.toList();
     final filtered = reversedList.where((raw) {
       final e = raw as Map<String, dynamic>;
@@ -2956,7 +3036,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   itemBuilder: (context, idx) {
                     final est = filtered[idx] as Map<String, dynamic>;
                     final parsed = _parseSummary(est['ITEMS SUMMARY'] ?? '');
-                    final pMode = est['PAYMENT MODE'] ?? 'CASH';
+                    final pMode = (est['PAYMENT MODE'] ?? est['PAYMENT_MODE'] ?? est['PAYMENT'] ?? 'CASH').toString().toUpperCase();
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
@@ -2970,14 +3050,14 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: (pMode == 'CREDIT' ? Colors.orange : Colors.green).withOpacity(0.18),
+                                color: (pMode == 'CREDIT' ? Colors.orange : (pMode == 'UPI' ? Colors.blue : Colors.green)).withOpacity(0.18),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(pMode,
                                   style: TextStyle(
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
-                                      color: pMode == 'CREDIT' ? Colors.orangeAccent : Colors.greenAccent)),
+                                      color: pMode == 'CREDIT' ? Colors.orangeAccent : (pMode == 'UPI' ? Colors.lightBlueAccent : Colors.greenAccent))),
                             ),
                           ],
                         ),
@@ -3511,7 +3591,7 @@ class _CustomersTabState extends State<CustomersTab> {
       final c = rawCust as Map<String, dynamic>;
       final name = (c['NAME'] ?? '').toString().toLowerCase();
       final b2b = (c['B2B NAMES'] ?? c['B2B'] ?? '').toString().toLowerCase();
-      final phone = (c['CONTACT NUMBER'] ?? c['PHONE'] ?? '').toString();
+      final phone = (c['CONTACT NUMBER'] ?? '').toString();
       final address = (c['ADDRESS'] ?? '').toString().toLowerCase();
       final q = searchQuery.toLowerCase();
       return name.contains(q) || b2b.contains(q) || phone.contains(q) || address.contains(q);
