@@ -7,8 +7,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const DAndCoApp());
 }
 
@@ -38,10 +40,26 @@ class DAndCoApp extends StatefulWidget {
 class _DAndCoAppState extends State<DAndCoApp> {
   ThemeMode _themeMode = ThemeMode.dark;
 
-  void changeTheme(ThemeMode mode) {
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isDark = prefs.getBool('isDarkMode') ?? true;
+    setState(() {
+      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    });
+  }
+
+  void changeTheme(ThemeMode mode) async {
     setState(() {
       _themeMode = mode;
     });
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setBool('isDarkMode', mode == ThemeMode.dark);
   }
 
   @override
@@ -121,7 +139,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    Future.delayed(const Duration(milliseconds: 2200), () {
+    Future.delayed(const Duration(milliseconds: 2000), () {
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -150,20 +168,20 @@ class _SplashScreenState extends State<SplashScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 100,
-                  height: 100,
+                  width: 95,
+                  height: 95,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF2979FF), Color(0xFF00E5FF)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(26),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF2979FF).withOpacity(0.45),
-                        blurRadius: 26,
-                        offset: const Offset(0, 10),
+                        color: const Color(0xFF2979FF).withOpacity(0.4),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
                       ),
                     ],
                   ),
@@ -171,7 +189,7 @@ class _SplashScreenState extends State<SplashScreen>
                     child: Text(
                       'DC',
                       style: TextStyle(
-                        fontSize: 44,
+                        fontSize: 42,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
                         letterSpacing: 2,
@@ -179,27 +197,27 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 22),
                 const Text(
                   'DC PRIME',
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: 26,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 3.5,
+                    letterSpacing: 3,
                     color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 const Text(
                   'DAVIS & COMPANY',
                   style: TextStyle(
-                    fontSize: 14,
-                    letterSpacing: 2.2,
+                    fontSize: 13,
+                    letterSpacing: 2,
                     color: Color(0xFF00E5FF),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                   decoration: BoxDecoration(
@@ -241,16 +259,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   String companyName = 'DAVIS & COMPANY';
   String companyLocation = 'ALUVA, ERNAKULAM';
-  final String appVersion = '1.2.0';
+  final String appVersion = '1.2.1';
 
+  // Persistent Settings
   bool askSaveConfirmation = true;
   bool enableLabourCharge = true;
   double defaultLabourPerBag = 3.0;
-  
   bool enableCategoryCoolie = true;
   double riceCooliePerBag = 9.0;
   double provisionCooliePerBag = 8.0;
-
   bool showUpiQr = true;
   String upiId = 'davisandco@upi';
 
@@ -262,7 +279,38 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void initState() {
     super.initState();
+    _loadSettings();
     fetchData();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      companyName = prefs.getString('companyName') ?? 'DAVIS & COMPANY';
+      companyLocation = prefs.getString('companyLocation') ?? 'ALUVA, ERNAKULAM';
+      askSaveConfirmation = prefs.getBool('askSaveConfirmation') ?? true;
+      enableLabourCharge = prefs.getBool('enableLabourCharge') ?? true;
+      defaultLabourPerBag = prefs.getDouble('defaultLabourPerBag') ?? 3.0;
+      enableCategoryCoolie = prefs.getBool('enableCategoryCoolie') ?? true;
+      riceCooliePerBag = prefs.getDouble('riceCooliePerBag') ?? 9.0;
+      provisionCooliePerBag = prefs.getDouble('provisionCooliePerBag') ?? 8.0;
+      showUpiQr = prefs.getBool('showUpiQr') ?? true;
+      upiId = prefs.getString('upiId') ?? 'davisandco@upi';
+    });
+  }
+
+  Future<void> saveSettingsToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('companyName', companyName);
+    await prefs.setString('companyLocation', companyLocation);
+    await prefs.setBool('askSaveConfirmation', askSaveConfirmation);
+    await prefs.setBool('enableLabourCharge', enableLabourCharge);
+    await prefs.setDouble('defaultLabourPerBag', defaultLabourPerBag);
+    await prefs.setBool('enableCategoryCoolie', enableCategoryCoolie);
+    await prefs.setDouble('riceCooliePerBag', riceCooliePerBag);
+    await prefs.setDouble('provisionCooliePerBag', provisionCooliePerBag);
+    await prefs.setBool('showUpiQr', showUpiQr);
+    await prefs.setString('upiId', upiId);
   }
 
   Future<void> fetchData({bool isBackground = false}) async {
@@ -308,58 +356,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       fetchData(isBackground: true);
       return true;
     }
-  }
-
-  void _openQuickCompanyEdit() {
-    final compController = TextEditingController(text: companyName);
-    final locController = TextEditingController(text: companyLocation);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.business, color: Color(0xFF2979FF)),
-            SizedBox(width: 8),
-            Text('Edit Company Details', style: TextStyle(fontSize: 18)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: compController,
-              textCapitalization: TextCapitalization.characters,
-              inputFormatters: [UpperCaseTextFormatter()],
-              decoration: const InputDecoration(labelText: 'Company Name *'),
-            ),
-            TextField(
-              controller: locController,
-              textCapitalization: TextCapitalization.characters,
-              inputFormatters: [UpperCaseTextFormatter()],
-              decoration: const InputDecoration(labelText: 'Location / City'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                companyName = compController.text.trim().isEmpty
-                    ? 'DAVIS & COMPANY'
-                    : compController.text.trim().toUpperCase();
-                companyLocation = locController.text.trim().isEmpty
-                    ? 'ALUVA, ERNAKULAM'
-                    : locController.text.trim().toUpperCase();
-              });
-              Navigator.pop(ctx);
-            },
-            child: const Text('Update'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _openCalculatorDialog() {
@@ -410,166 +406,36 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
-  void _openSettingsDialog() {
-    final upiCtrl = TextEditingController(text: upiId);
-    final labourCtrl = TextEditingController(text: defaultLabourPerBag.toString());
-    final riceCtrl = TextEditingController(text: riceCooliePerBag.toString());
-    final provCtrl = TextEditingController(text: provisionCooliePerBag.toString());
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.only(
-            top: 20,
-            left: 20,
-            right: 20,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.tune, color: Color(0xFF2979FF)),
-                    SizedBox(width: 8),
-                    Text('Settings & Preferences', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const Text('Appearance', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    ChoiceChip(
-                      label: const Text('Dark'),
-                      selected: Theme.of(context).brightness == Brightness.dark,
-                      onSelected: (_) {
-                        DAndCoApp.of(context)?.changeTheme(ThemeMode.dark);
-                        setModalState(() {});
-                      },
-                    ),
-                    ChoiceChip(
-                      label: const Text('Light'),
-                      selected: Theme.of(context).brightness == Brightness.light,
-                      onSelected: (_) {
-                        DAndCoApp.of(context)?.changeTheme(ThemeMode.light);
-                        setModalState(() {});
-                      },
-                    ),
-                    ChoiceChip(
-                      label: const Text('System'),
-                      selected: false,
-                      onSelected: (_) {
-                        DAndCoApp.of(context)?.changeTheme(ThemeMode.system);
-                        setModalState(() {});
-                      },
-                    ),
-                  ],
-                ),
-                const Divider(height: 28),
-                const Text('Billing Controls', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Confirm Before Save'),
-                  subtitle: const Text('Prompt alert before recording bill'),
-                  value: askSaveConfirmation,
-                  activeColor: const Color(0xFF2979FF),
-                  onChanged: (val) {
-                    setState(() => askSaveConfirmation = val);
-                    setModalState(() {});
-                  },
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Enable Labour / Coolie Charge'),
-                  subtitle: const Text('Add bag-based loading charge'),
-                  value: enableLabourCharge,
-                  activeColor: const Color(0xFF2979FF),
-                  onChanged: (val) {
-                    setState(() => enableLabourCharge = val);
-                    setModalState(() {});
-                  },
-                ),
-                if (enableLabourCharge) ...[
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Category-wise Coolie Rates'),
-                    subtitle: const Text('RICE: ₹9, PROVISION: ₹8 per bag'),
-                    value: enableCategoryCoolie,
-                    activeColor: const Color(0xFF2979FF),
-                    onChanged: (val) {
-                      setState(() => enableCategoryCoolie = val);
-                      setModalState(() {});
-                    },
-                  ),
-                  if (enableCategoryCoolie)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: riceCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: const InputDecoration(labelText: 'RICE Rate (₹/Bag)', isDense: true),
-                            onChanged: (val) => riceCooliePerBag = double.tryParse(val) ?? 9.0,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: provCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: const InputDecoration(labelText: 'PROVISION Rate (₹/Bag)', isDense: true),
-                            onChanged: (val) => provisionCooliePerBag = double.tryParse(val) ?? 8.0,
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    TextField(
-                      controller: labourCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: 'Default Labour Rate per Bag (₹)', isDense: true),
-                      onChanged: (val) => defaultLabourPerBag = double.tryParse(val) ?? 3.0,
-                    ),
-                ],
-                const SizedBox(height: 10),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('UPI Payment QR Code'),
-                  subtitle: const Text('Display scanner on bill and PDF'),
-                  value: showUpiQr,
-                  activeColor: const Color(0xFF2979FF),
-                  onChanged: (val) {
-                    setState(() => showUpiQr = val);
-                    setModalState(() {});
-                  },
-                ),
-                if (showUpiQr)
-                  TextField(
-                    controller: upiCtrl,
-                    decoration: const InputDecoration(labelText: 'Business UPI ID (e.g. name@okhdfcbank)', isDense: true),
-                    onChanged: (val) => upiId = val.trim(),
-                  ),
-                const Divider(height: 28),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.person_pin, color: Colors.amberAccent),
-                  title: const Text('Developer Details'),
-                  subtitle: const Text('Sudhi (S Tech) • +91 85906 56096'),
-                  onTap: () async {
-                    final url = Uri.parse("tel:+918590656096");
-                    if (await canLaunchUrl(url)) launchUrl(url);
-                  },
-                ),
-              ],
-            ),
-          ),
+  void _openOrganisedSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SettingsDirectoryScreen(
+          companyName: companyName,
+          companyLocation: companyLocation,
+          askSaveConfirmation: askSaveConfirmation,
+          enableLabourCharge: enableLabourCharge,
+          defaultLabourPerBag: defaultLabourPerBag,
+          enableCategoryCoolie: enableCategoryCoolie,
+          riceCooliePerBag: riceCooliePerBag,
+          provisionCooliePerBag: provisionCooliePerBag,
+          showUpiQr: showUpiQr,
+          upiId: upiId,
+          onSaveSettings: (newMap) async {
+            setState(() {
+              companyName = newMap['companyName'];
+              companyLocation = newMap['companyLocation'];
+              askSaveConfirmation = newMap['askSaveConfirmation'];
+              enableLabourCharge = newMap['enableLabourCharge'];
+              defaultLabourPerBag = newMap['defaultLabourPerBag'];
+              enableCategoryCoolie = newMap['enableCategoryCoolie'];
+              riceCooliePerBag = newMap['riceCooliePerBag'];
+              provisionCooliePerBag = newMap['provisionCooliePerBag'];
+              showUpiQr = newMap['showUpiQr'];
+              upiId = newMap['upiId'];
+            });
+            await saveSettingsToPrefs();
+          },
         ),
       ),
     );
@@ -687,7 +553,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       appBar: AppBar(
         titleSpacing: 12,
         title: InkWell(
-          onTap: _openQuickCompanyEdit,
+          onTap: _openOrganisedSettings,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -716,8 +582,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             tooltip: 'Calculator',
             onPressed: _openCalculatorDialog,
           ),
-          IconButton(icon: const Icon(Icons.tune_outlined), onPressed: _openSettingsDialog),
-          IconButton(icon: const Icon(Icons.sync), onPressed: () => fetchData()),
+          IconButton(
+            icon: const Icon(Icons.folder_outlined),
+            tooltip: 'Settings Directory',
+            onPressed: _openOrganisedSettings,
+          ),
+          IconButton(
+            icon: const Icon(Icons.sync),
+            tooltip: 'Sync Data',
+            onPressed: () => fetchData(),
+          ),
         ],
       ),
       body: _isLoading
@@ -748,6 +622,380 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 }
+
+// ---------------- ORGANIZED SETTINGS FOLDER SCREEN ----------------
+
+class SettingsDirectoryScreen extends StatefulWidget {
+  final String companyName;
+  final String companyLocation;
+  final bool askSaveConfirmation;
+  final bool enableLabourCharge;
+  final double defaultLabourPerBag;
+  final bool enableCategoryCoolie;
+  final double riceCooliePerBag;
+  final double provisionCooliePerBag;
+  final bool showUpiQr;
+  final String upiId;
+  final Function(Map<String, dynamic>) onSaveSettings;
+
+  const SettingsDirectoryScreen({
+    super.key,
+    required this.companyName,
+    required this.companyLocation,
+    required this.askSaveConfirmation,
+    required this.enableLabourCharge,
+    required this.defaultLabourPerBag,
+    required this.enableCategoryCoolie,
+    required this.riceCooliePerBag,
+    required this.provisionCooliePerBag,
+    required this.showUpiQr,
+    required this.upiId,
+    required this.onSaveSettings,
+  });
+
+  @override
+  State<SettingsDirectoryScreen> createState() => _SettingsDirectoryScreenState();
+}
+
+class _SettingsDirectoryScreenState extends State<SettingsDirectoryScreen> {
+  late String companyName;
+  late String companyLocation;
+  late bool askSaveConfirmation;
+  late bool enableLabourCharge;
+  late double defaultLabourPerBag;
+  late bool enableCategoryCoolie;
+  late double riceCooliePerBag;
+  late double provisionCooliePerBag;
+  late bool showUpiQr;
+  late String upiId;
+
+  @override
+  void initState() {
+    super.initState();
+    companyName = widget.companyName;
+    companyLocation = widget.companyLocation;
+    askSaveConfirmation = widget.askSaveConfirmation;
+    enableLabourCharge = widget.enableLabourCharge;
+    defaultLabourPerBag = widget.defaultLabourPerBag;
+    enableCategoryCoolie = widget.enableCategoryCoolie;
+    riceCooliePerBag = widget.riceCooliePerBag;
+    provisionCooliePerBag = widget.provisionCooliePerBag;
+    showUpiQr = widget.showUpiQr;
+    upiId = widget.upiId;
+  }
+
+  void _dispatchChanges() {
+    widget.onSaveSettings({
+      'companyName': companyName,
+      'companyLocation': companyLocation,
+      'askSaveConfirmation': askSaveConfirmation,
+      'enableLabourCharge': enableLabourCharge,
+      'defaultLabourPerBag': defaultLabourPerBag,
+      'enableCategoryCoolie': enableCategoryCoolie,
+      'riceCooliePerBag': riceCooliePerBag,
+      'provisionCooliePerBag': provisionCooliePerBag,
+      'showUpiQr': showUpiQr,
+      'upiId': upiId,
+    });
+  }
+
+  void _openCompanyFolder() {
+    final compController = TextEditingController(text: companyName);
+    final locController = TextEditingController(text: companyLocation);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Company Profile Details'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: compController,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [UpperCaseTextFormatter()],
+              decoration: const InputDecoration(labelText: 'Company Title *'),
+            ),
+            TextField(
+              controller: locController,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [UpperCaseTextFormatter()],
+              decoration: const InputDecoration(labelText: 'Branch / Location'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                companyName = compController.text.trim().isEmpty ? 'DAVIS & COMPANY' : compController.text.trim().toUpperCase();
+                companyLocation = locController.text.trim().isEmpty ? 'ALUVA, ERNAKULAM' : locController.text.trim().toUpperCase();
+              });
+              _dispatchChanges();
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save Changes'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openCoolieFolder() {
+    final labourCtrl = TextEditingController(text: defaultLabourPerBag.toString());
+    final riceCtrl = TextEditingController(text: riceCooliePerBag.toString());
+    final provCtrl = TextEditingController(text: provisionCooliePerBag.toString());
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => AlertDialog(
+          title: const Text('Coolie & Labour Rules'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Enable Coolie Charge'),
+                  value: enableLabourCharge,
+                  onChanged: (val) {
+                    setDlgState(() => enableLabourCharge = val);
+                    setState(() {});
+                  },
+                ),
+                if (enableLabourCharge) ...[
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Category-wise Rate'),
+                    subtitle: const Text('Rice / Provision separation'),
+                    value: enableCategoryCoolie,
+                    onChanged: (val) {
+                      setDlgState(() => enableCategoryCoolie = val);
+                      setState(() {});
+                    },
+                  ),
+                  if (enableCategoryCoolie) ...[
+                    TextField(
+                      controller: riceCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'RICE Rate (₹/Bag)'),
+                      onChanged: (val) => riceCooliePerBag = double.tryParse(val) ?? 9.0,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: provCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'PROVISION Rate (₹/Bag)'),
+                      onChanged: (val) => provisionCooliePerBag = double.tryParse(val) ?? 8.0,
+                    ),
+                  ] else ...[
+                    TextField(
+                      controller: labourCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Standard Coolie (₹/Bag)'),
+                      onChanged: (val) => defaultLabourPerBag = double.tryParse(val) ?? 3.0,
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                _dispatchChanges();
+                Navigator.pop(ctx);
+              },
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openUpiFolder() {
+    final upiCtrl = TextEditingController(text: upiId);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDlgState) => AlertDialog(
+          title: const Text('UPI & Digital Payment'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Display UPI QR Code'),
+                subtitle: const Text('Show payment QR on bill & PDF'),
+                value: showUpiQr,
+                onChanged: (val) {
+                  setDlgState(() => showUpiQr = val);
+                  setState(() {});
+                },
+              ),
+              if (showUpiQr)
+                TextField(
+                  controller: upiCtrl,
+                  decoration: const InputDecoration(labelText: 'UPI VPA / ID (e.g. name@upi)'),
+                  onChanged: (val) => upiId = val.trim(),
+                ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                _dispatchChanges();
+                Navigator.pop(ctx);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openDeveloperModal() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Row(
+          children: [
+            Icon(Icons.terminal, color: Color(0xFF2979FF)),
+            SizedBox(width: 8),
+            Text('Developer Details', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('DC PRIME Billing Companion', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 6),
+            const Text('Built and Developed by Sudhi (S Tech)'),
+            const SizedBox(height: 4),
+            const Text('Contact: +91 85906 56096', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2E7D32)),
+                  icon: const Icon(Icons.call, size: 16),
+                  label: const Text('Call'),
+                  onPressed: () async {
+                    final uri = Uri.parse("tel:+918590656096");
+                    if (await canLaunchUrl(uri)) launchUrl(uri);
+                  },
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
+                  icon: const Icon(Icons.share, size: 16),
+                  label: const Text('WhatsApp'),
+                  onPressed: () async {
+                    final uri = Uri.parse("https://wa.me/918590656096");
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings Directory')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildDirectoryFolder(
+            icon: Icons.business,
+            title: 'Company Identity',
+            subtitle: '$companyName • $companyLocation',
+            onTap: _openCompanyFolder,
+          ),
+          _buildDirectoryFolder(
+            icon: Icons.local_shipping,
+            title: 'Coolie & Labour Parameters',
+            subtitle: enableLabourCharge
+                ? (enableCategoryCoolie ? 'Rice: ₹${riceCooliePerBag.toInt()} / Prov: ₹${provisionCooliePerBag.toInt()}' : 'Standard: ₹${defaultLabourPerBag.toInt()}/Bag')
+                : 'Disabled',
+            onTap: _openCoolieFolder,
+          ),
+          _buildDirectoryFolder(
+            icon: Icons.qr_code_2,
+            title: 'UPI & Payment Gateway',
+            subtitle: showUpiQr ? upiId : 'QR Scanner Disabled',
+            onTap: _openUpiFolder,
+          ),
+          _buildDirectoryFolder(
+            icon: Icons.color_lens,
+            title: 'Theme & Appearance',
+            subtitle: Theme.of(context).brightness == Brightness.dark ? 'Dark Mode' : 'Light Mode',
+            onTap: () {
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              DAndCoApp.of(context)?.changeTheme(isDark ? ThemeMode.light : ThemeMode.dark);
+              setState(() {});
+            },
+          ),
+          _buildDirectoryFolder(
+            icon: Icons.verified_user,
+            title: 'Confirmation Prompt',
+            subtitle: askSaveConfirmation ? 'Ask before recording invoice' : 'Fast instant save',
+            onTap: () {
+              setState(() => askSaveConfirmation = !askSaveConfirmation);
+              _dispatchChanges();
+            },
+          ),
+          _buildDirectoryFolder(
+            icon: Icons.code,
+            title: 'Developer & Support',
+            subtitle: 'Sudhi (S Tech) • Tap for phone/chat',
+            onTap: _openDeveloperModal,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDirectoryFolder({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: CircleAvatar(
+          radius: 22,
+          backgroundColor: const Color(0xFF2979FF).withOpacity(0.16),
+          child: Icon(icon, color: const Color(0xFF2979FF)),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        subtitle: Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+// ---------------- DASHBOARD & VISUAL SALES CHART ----------------
 
 class DashboardHomeScreen extends StatelessWidget {
   final String companyName;
@@ -792,17 +1040,30 @@ class DashboardHomeScreen extends StatelessWidget {
     int todayBills = 0;
     double todayCredit = 0.0;
 
+    // 7 Days sales map for lag-free visual trend chart
+    Map<String, double> past7Days = {};
+    for (int i = 6; i >= 0; i--) {
+      DateTime d = now.subtract(Duration(days: i));
+      String ds = "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+      past7Days[ds] = 0.0;
+    }
+
     for (var est in estimates) {
       if (est is Map<String, dynamic>) {
         final d = _cleanDate(est['DATE']);
+        final amt = double.tryParse(est['TOTAL AMOUNT']?.toString() ?? '0') ?? 0.0;
+
         if (d == todayStr) {
-          final amt = double.tryParse(est['TOTAL AMOUNT']?.toString() ?? '0') ?? 0.0;
           todaySales += amt;
           todayBills++;
           final pMode = (est['PAYMENT MODE'] ?? est['PAYMENT_MODE'] ?? est['PAYMENT'] ?? 'CASH').toString().toUpperCase();
           if (pMode == 'CREDIT') {
             todayCredit += amt;
           }
+        }
+
+        if (past7Days.containsKey(d)) {
+          past7Days[d] = (past7Days[d] ?? 0.0) + amt;
         }
       }
     }
@@ -836,7 +1097,9 @@ class DashboardHomeScreen extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(companyName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                    Expanded(
+                      child: Text(companyName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white), overflow: TextOverflow.ellipsis),
+                    ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
@@ -859,8 +1122,67 @@ class DashboardHomeScreen extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          const Text('Quick Actions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+
+          // 7-Day Performance Sales Graph (Smooth Lag-Free Bar Chart)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardTheme.color,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('7-Day Sales Trend', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    Icon(Icons.show_chart, color: Color(0xFF2979FF), size: 18),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 110,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: past7Days.entries.map((entry) {
+                      double maxVal = past7Days.values.fold(1.0, (prev, element) => element > prev ? element : prev);
+                      double ratio = maxVal == 0 ? 0.0 : (entry.value / maxVal).clamp(0.05, 1.0);
+                      String dayLabel = entry.key.split('-').last;
+
+                      return Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Text('₹${entry.value > 999 ? "${(entry.value / 1000).toStringAsFixed(1)}k" : entry.value.toInt()}',
+                              style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                          const SizedBox(height: 4),
+                          Container(
+                            width: 22,
+                            height: 70 * ratio,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF2979FF), Color(0xFF00E5FF)],
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(dayLabel, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+          const Text('Quick Access', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -879,7 +1201,7 @@ class DashboardHomeScreen extends StatelessWidget {
                 child: _buildActionBtn(
                   context,
                   title: 'Invoices',
-                  subtitle: 'View history',
+                  subtitle: 'History & PDF',
                   icon: Icons.history,
                   color: const Color(0xFF00B0FF),
                   onTap: onOpenInvoices,
@@ -913,37 +1235,6 @@ class DashboardHomeScreen extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Recent Invoices', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              TextButton(onPressed: onOpenInvoices, child: const Text('View All')),
-            ],
-          ),
-          ...estimates.reversed.take(4).map((est) {
-            final e = est as Map<String, dynamic>;
-            final pMode = (e['PAYMENT MODE'] ?? e['PAYMENT_MODE'] ?? e['PAYMENT'] ?? 'CASH').toString().toUpperCase();
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                onTap: onOpenInvoices,
-                leading: CircleAvatar(
-                  backgroundColor: const Color(0xFF2979FF).withOpacity(0.15),
-                  child: Text(
-                    (e['CUSTOMER NAME'] ?? 'C').toString().substring(0, 1).toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF)),
-                  ),
-                ),
-                title: Text(e['CUSTOMER NAME'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
-                subtitle: Text("${e['ESTIMATE NO']} • ${_cleanDate(e['DATE'])} • $pMode", style: const TextStyle(fontSize: 12)),
-                trailing: Text(
-                  '₹${e['TOTAL AMOUNT']}',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.greenAccent),
-                ),
-              ),
-            );
-          }),
         ],
       ),
     );
@@ -958,12 +1249,14 @@ class DashboardHomeScreen extends StatelessWidget {
           children: [
             Icon(icon, size: 16, color: Colors.white70),
             const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontSize: 10, color: Colors.white60)),
-                Text(val, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 10, color: Colors.white60)),
+                  Text(val, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white), overflow: TextOverflow.ellipsis),
+                ],
+              ),
             ),
           ],
         ),
@@ -998,6 +1291,8 @@ class DashboardHomeScreen extends StatelessWidget {
   }
 }
 
+// ---------------- BILLING / ESTIMATE SCREEN ----------------
+
 class EstimateScreen extends StatefulWidget {
   final List<dynamic> items;
   final List<dynamic> customers;
@@ -1011,7 +1306,7 @@ class EstimateScreen extends StatefulWidget {
   final bool enableCategoryCoolie;
   final double riceCooliePerBag;
   final double provisionCooliePerBag;
-  final showUpiQr;
+  final bool showUpiQr;
   final String upiId;
   final VoidCallback onClearEdit;
   final Future<bool> Function(Map<String, dynamic>) onSaveEstimate;
@@ -1436,7 +1731,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                         final name = c['NAME'] ?? '';
                         final phone = c['CONTACT NUMBER'] ?? '';
                         return ListTile(
-                          title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
+                          title: Text(name.toString(), style: const TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
                           subtitle: Text(phone.isNotEmpty ? '📞 $phone' : 'No phone', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                           onTap: () {
                             setState(() => selectedCustomer = name.toString());
@@ -1514,7 +1809,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                         return ListTile(
                           title: Row(
                             children: [
-                              Expanded(child: Text(item['ITEM NAME'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600))),
+                              Expanded(child: Text(item['ITEM NAME'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
                               if (isTaxable)
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
@@ -1716,7 +2011,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Text('Customer: $cust', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('Payment: $pMode', style: const pw.TextStyle(fontSize: 12)),
+                    pw.Text('Payment: $pMode', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
                   ],
                 ),
                 pw.SizedBox(height: 12),
@@ -1967,7 +2262,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                         onTap: () => _promptItemEntry({'ITEM NAME': item['name'], 'RATE': item['rate'], 'RATE PER KG/BAG': item['unit']}, idx),
                         title: Row(
                           children: [
-                            Expanded(child: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold))),
+                            Expanded(child: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
                             if (tRate > 0)
                               Text('GST $tRate% (Incl)', style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                           ],
@@ -2087,6 +2382,8 @@ class PdfViewScreen extends StatelessWidget {
     );
   }
 }
+
+// ---------------- INVOICES LIST & 2-ROW NON-OVERFLOW LAYOUT ----------------
 
 class SavedEstimatesTab extends StatefulWidget {
   final List<dynamic> estimates;
@@ -2461,7 +2758,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                               Row(
                                 children: [
                                   Expanded(
-                                    child: Text(item['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                                    child: Text(item['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13), overflow: TextOverflow.ellipsis),
                                   ),
                                   if (tRate > 0)
                                     Padding(
@@ -2507,7 +2804,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10)),
-                      icon: const Icon(Icons.picture_as_pdf, size: 15),
+                      icon: const Icon(Icons.picture_as_pdf, size: 14),
                       label: const Text('View PDF', style: TextStyle(fontSize: 12)),
                       onPressed: () {
                         Navigator.pop(ctx);
@@ -2519,7 +2816,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10)),
-                      icon: const Icon(Icons.share, size: 15),
+                      icon: const Icon(Icons.share, size: 14),
                       label: const Text('WhatsApp', style: TextStyle(fontSize: 12)),
                       onPressed: () {
                         Navigator.pop(ctx);
@@ -2633,7 +2930,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
             itemBuilder: (context, idx) {
               final est = filtered[idx] as Map<String, dynamic>;
               final pMode = (est['PAYMENT MODE'] ?? est['PAYMENT_MODE'] ?? est['PAYMENT'] ?? 'CASH').toString().toUpperCase();
-              
+
               return Card(
                 margin: const EdgeInsets.only(bottom: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -2716,6 +3013,8 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
   }
 }
 
+// ---------------- PRICE LIST TAB (CLEAN NO CHIPS & FIXED RATIO) ----------------
+
 class PriceListTab extends StatefulWidget {
   final List<dynamic> items;
   final Future<bool> Function(Map<String, dynamic>)? onAddItem;
@@ -2739,7 +3038,7 @@ class _PriceListTabState extends State<PriceListTab> {
           children: [
             const Icon(Icons.inventory_2, color: Color(0xFF2979FF)),
             const SizedBox(width: 8),
-            Expanded(child: Text(item['ITEM NAME'] ?? 'Item Details', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold))),
+            Expanded(child: Text(item['ITEM NAME'] ?? 'Item Details', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
           ],
         ),
         content: Column(
@@ -2972,28 +3271,56 @@ class _PriceListTabState extends State<PriceListTab> {
                 final isTaxable = (it['TAXABLE OR NOT'] ?? '').toString().toUpperCase() == 'TAXABLE';
                 final tRate = it['TAX RATE'] ?? it['GST'] ?? 0;
                 final cat = (it['CATEGORY'] ?? '').toString();
+
+                // Fixed Ratio Card Layout with clean wrapping
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
                     onTap: () => _showItemDetailModal(it),
-                    title: Row(
-                      children: [
-                        Expanded(child: Text(it['ITEM NAME'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold))),
-                        if (isTaxable)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                            decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.18), borderRadius: BorderRadius.circular(4)),
-                            child: Text('GST $tRate%', style: const TextStyle(fontSize: 10, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        it['ITEM NAME'] ?? '',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (isTaxable)
+                                      Container(
+                                        margin: const EdgeInsets.only(left: 6),
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.18), borderRadius: BorderRadius.circular(4)),
+                                        child: Text('GST $tRate%', style: const TextStyle(fontSize: 10, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "${it['RATE PER KG/BAG'] ?? ''} ${cat.isNotEmpty ? "• $cat" : ""}",
+                                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                ),
+                              ],
+                            ),
                           ),
-                      ],
-                    ),
-                    subtitle: Text("${it['RATE PER KG/BAG'] ?? ''} ${cat.isNotEmpty ? "• $cat" : ""}\nTap for details", style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('₹${it['RATE']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
-                        IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => _showItemDialog(it)),
-                      ],
+                          const SizedBox(width: 8),
+                          Text('₹${it['RATE']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2979FF))),
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 18),
+                            onPressed: () => _showItemDialog(it),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );
@@ -3005,6 +3332,8 @@ class _PriceListTabState extends State<PriceListTab> {
     );
   }
 }
+
+// ---------------- CUSTOMERS TAB (FIXED PROPORTION & CLEAN RATIO) ----------------
 
 class CustomersTab extends StatefulWidget {
   final List<dynamic> customers;
@@ -3054,7 +3383,7 @@ class _CustomersTabState extends State<CustomersTab> {
           children: [
             const Icon(Icons.person, color: Color(0xFF2979FF)),
             const SizedBox(width: 8),
-            Expanded(child: Text(name.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+            Expanded(child: Text(name.toString(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
           ],
         ),
         content: Column(
@@ -3219,21 +3548,46 @@ class _CustomersTabState extends State<CustomersTab> {
               itemBuilder: (context, idx) {
                 final c = filtered[idx] as Map<String, dynamic>;
                 final phone = (c['CONTACT NUMBER'] ?? '').toString();
+
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
                     onTap: () => _showCustomerDetailModal(c),
-                    title: Text(c['NAME'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text(phone.isNotEmpty ? '📞 $phone\nTap for profile' : 'No contact added', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (phone.isNotEmpty) ...[
-                          IconButton(icon: const Icon(Icons.call, color: Colors.greenAccent, size: 20), onPressed: () => _callPhone(phone)),
-                          IconButton(icon: const Icon(Icons.share, color: Color(0xFF25D366), size: 20), onPressed: () => _whatsappPhone(phone)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  c['NAME'] ?? '',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  phone.isNotEmpty ? '📞 $phone' : 'No contact added',
+                                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (phone.isNotEmpty) ...[
+                                IconButton(icon: const Icon(Icons.call, color: Colors.greenAccent, size: 20), onPressed: () => _callPhone(phone)),
+                                IconButton(icon: const Icon(Icons.share, color: Color(0xFF25D366), size: 20), onPressed: () => _whatsappPhone(phone)),
+                              ],
+                              IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => _showCustomerDialog(c)),
+                            ],
+                          ),
                         ],
-                        IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => _showCustomerDialog(c)),
-                      ],
+                      ),
                     ),
                   ),
                 );
@@ -3245,6 +3599,8 @@ class _CustomersTabState extends State<CustomersTab> {
     );
   }
 }
+
+// ---------------- CALCULATOR POPUP MODAL ----------------
 
 class CalculatorView extends StatefulWidget {
   const CalculatorView({super.key});
