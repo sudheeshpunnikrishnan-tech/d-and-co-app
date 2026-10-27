@@ -240,7 +240,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   String companyName = 'DAVIS & COMPANY';
   String companyLocation = 'ALUVA, ERNAKULAM';
-  final String appVersion = '1.1.2';
+  final String appVersion = '1.1.4';
 
   bool askSaveConfirmation = true;
   bool enableLabourCharge = true;
@@ -344,6 +344,54 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             child: const Text('Update'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _openCalculatorDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.72,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Icon(Icons.calculate, color: Color(0xFF2979FF)),
+                      SizedBox(width: 8),
+                      Text('Calculator', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            const Expanded(child: CalculatorView()),
+          ],
+        ),
       ),
     );
   }
@@ -483,6 +531,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     });
   }
 
+  void _openInvoicesHistoryScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('Invoice History')),
+          body: SavedEstimatesTab(
+            estimates: _allData['ESTIMATES'] ?? [],
+            companyName: companyName,
+            companyLocation: companyLocation,
+            customers: _allData['CUSTOMERS'] ?? [],
+            onEditInvoice: (inv) {
+              Navigator.pop(context);
+              _handleEditInvoice(inv);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     List<dynamic> itemsList = _allData['ITEMS'] ?? _allData['ITEM '] ?? [];
@@ -497,6 +566,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         items: itemsList,
         customers: customersList,
         onNavigateTab: (index) => setState(() => _currentIndex = index),
+        onOpenInvoices: _openInvoicesHistoryScreen,
       ),
       EstimateScreen(
         items: itemsList,
@@ -526,13 +596,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           'tab': 'ITEMS',
           'data': itemData,
         }),
-      ),
-      SavedEstimatesTab(
-        estimates: estimatesList,
-        companyName: companyName,
-        companyLocation: companyLocation,
-        customers: customersList,
-        onEditInvoice: _handleEditInvoice,
       ),
       PriceListTab(
         items: itemsList,
@@ -564,7 +627,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           'data': updatedData,
         }),
       ),
-      const CalculatorTab(),
     ];
 
     return Scaffold(
@@ -595,6 +657,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.calculate_outlined),
+            tooltip: 'Calculator',
+            onPressed: _openCalculatorDialog,
+          ),
           IconButton(icon: const Icon(Icons.tune_outlined), onPressed: _openSettingsDialog),
           IconButton(icon: const Icon(Icons.sync), onPressed: fetchData),
         ],
@@ -610,10 +677,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'Billing'),
-          NavigationDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history), label: 'Invoices'),
           NavigationDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: 'Price List'),
           NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Customers'),
-          NavigationDestination(icon: Icon(Icons.calculate_outlined), selectedIcon: Icon(Icons.calculate), label: 'Calculator'),
         ],
       ),
     );
@@ -627,6 +692,7 @@ class DashboardHomeScreen extends StatelessWidget {
   final List<dynamic> items;
   final List<dynamic> customers;
   final Function(int) onNavigateTab;
+  final VoidCallback onOpenInvoices;
 
   const DashboardHomeScreen({
     super.key,
@@ -636,6 +702,7 @@ class DashboardHomeScreen extends StatelessWidget {
     required this.items,
     required this.customers,
     required this.onNavigateTab,
+    required this.onOpenInvoices,
   });
 
   String _cleanDate(dynamic rawDate) {
@@ -750,7 +817,7 @@ class DashboardHomeScreen extends StatelessWidget {
                   subtitle: 'View history',
                   icon: Icons.history,
                   color: const Color(0xFF00B0FF),
-                  onTap: () => onNavigateTab(2),
+                  onTap: onOpenInvoices,
                 ),
               ),
             ],
@@ -765,7 +832,7 @@ class DashboardHomeScreen extends StatelessWidget {
                   subtitle: '${items.length} items',
                   icon: Icons.inventory_2,
                   color: const Color(0xFFFF9100),
-                  onTap: () => onNavigateTab(3),
+                  onTap: () => onNavigateTab(2),
                 ),
               ),
               const SizedBox(width: 12),
@@ -776,11 +843,42 @@ class DashboardHomeScreen extends StatelessWidget {
                   subtitle: '${customers.length} clients',
                   icon: Icons.people,
                   color: const Color(0xFF00E676),
-                  onTap: () => onNavigateTab(4),
+                  onTap: () => onNavigateTab(3),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Recent Invoices', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              TextButton(onPressed: onOpenInvoices, child: const Text('View All')),
+            ],
+          ),
+          ...estimates.reversed.take(4).map((est) {
+            final e = est as Map<String, dynamic>;
+            final pMode = (e['PAYMENT MODE'] ?? e['PAYMENT_MODE'] ?? e['PAYMENT'] ?? 'CASH').toString().toUpperCase();
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                onTap: onOpenInvoices,
+                leading: CircleAvatar(
+                  backgroundColor: const Color(0xFF2979FF).withOpacity(0.15),
+                  child: Text(
+                    (e['CUSTOMER NAME'] ?? 'C').toString().substring(0, 1).toUpperCase(),
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF)),
+                  ),
+                ),
+                title: Text(e['CUSTOMER NAME'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text("${e['ESTIMATE NO']} • ${_cleanDate(e['DATE'])} • $pMode", style: const TextStyle(fontSize: 12)),
+                trailing: Text(
+                  '₹${e['TOTAL AMOUNT']}',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.greenAccent),
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -960,6 +1058,109 @@ class _EstimateScreenState extends State<EstimateScreen> {
     return "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=$encoded";
   }
 
+  void _showAddCustomerInline() {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final addressCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Customer'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [UpperCaseTextFormatter()],
+              decoration: const InputDecoration(labelText: 'Customer Name *'),
+            ),
+            TextField(
+              controller: phoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: 'Phone Number'),
+            ),
+            TextField(
+              controller: addressCtrl,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [UpperCaseTextFormatter()],
+              decoration: const InputDecoration(labelText: 'Address'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameCtrl.text.trim().isEmpty) return;
+              Navigator.pop(ctx);
+              final ok = await widget.onAddCustomer({
+                'NAME': nameCtrl.text.trim().toUpperCase(),
+                'CONTACT NUMBER': phoneCtrl.text.trim(),
+                'ADDRESS': addressCtrl.text.trim().toUpperCase(),
+              });
+              if (ok) {
+                setState(() => selectedCustomer = nameCtrl.text.trim().toUpperCase());
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddItemInline() {
+    final nameCtrl = TextEditingController();
+    final rateCtrl = TextEditingController();
+    final rateTypeCtrl = TextEditingController(text: 'RATE PER KG');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Item'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [UpperCaseTextFormatter()],
+              decoration: const InputDecoration(labelText: 'Item Name *'),
+            ),
+            TextField(
+              controller: rateCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Rate (₹) *'),
+            ),
+            TextField(
+              controller: rateTypeCtrl,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [UpperCaseTextFormatter()],
+              decoration: const InputDecoration(labelText: 'Rate Per (KG / BAG)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameCtrl.text.trim().isEmpty) return;
+              Navigator.pop(ctx);
+              await widget.onAddItem({
+                'ITEM NAME': nameCtrl.text.trim().toUpperCase(),
+                'RATE PER KG/BAG': rateTypeCtrl.text.trim().toUpperCase(),
+                'RATE': double.tryParse(rateCtrl.text) ?? 0,
+              });
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openCustomerPicker() {
     showModalBottomSheet(
       context: context,
@@ -983,8 +1184,21 @@ class _EstimateScreenState extends State<EstimateScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  const Text('Select Customer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Select Customer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      TextButton.icon(
+                        icon: const Icon(Icons.person_add, size: 18),
+                        label: const Text('+ Add', style: TextStyle(fontWeight: FontWeight.bold)),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showAddCustomerInline();
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
                   TextField(
                     textCapitalization: TextCapitalization.characters,
                     inputFormatters: [UpperCaseTextFormatter()],
@@ -1050,8 +1264,21 @@ class _EstimateScreenState extends State<EstimateScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  const Text('Select Item to Add', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Select Item to Add', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      TextButton.icon(
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('+ Add', style: TextStyle(fontWeight: FontWeight.bold)),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showAddItemInline();
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
                   TextField(
                     textCapitalization: TextCapitalization.characters,
                     inputFormatters: [UpperCaseTextFormatter()],
@@ -1881,36 +2108,52 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                 ],
               ),
               const SizedBox(height: 20),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
+              Row(
                 children: [
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.edit, size: 16, color: Colors.orangeAccent),
-                    label: const Text('Edit Bill', style: TextStyle(color: Colors.orangeAccent)),
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      widget.onEditInvoice(est);
-                    },
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      icon: const Icon(Icons.edit, size: 15, color: Colors.orangeAccent),
+                      label: const Text('Edit Bill', style: TextStyle(fontSize: 12, color: Colors.orangeAccent)),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        widget.onEditInvoice(est);
+                      },
+                    ),
                   ),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-                    icon: const Icon(Icons.picture_as_pdf, size: 16),
-                    label: const Text('View PDF'),
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _previewExistingPdf(est);
-                    },
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      icon: const Icon(Icons.picture_as_pdf, size: 15),
+                      label: const Text('View PDF', style: TextStyle(fontSize: 12)),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _previewExistingPdf(est);
+                      },
+                    ),
                   ),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white),
-                    icon: const Icon(Icons.share, size: 16),
-                    label: const Text('WhatsApp'),
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _shareSavedWhatsApp(est);
-                    },
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF25D366),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      icon: const Icon(Icons.share, size: 15),
+                      label: const Text('WhatsApp', style: TextStyle(fontSize: 12)),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _shareSavedWhatsApp(est);
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -2517,14 +2760,14 @@ class _CustomersTabState extends State<CustomersTab> {
   }
 }
 
-class CalculatorTab extends StatefulWidget {
-  const CalculatorTab({super.key});
+class CalculatorView extends StatefulWidget {
+  const CalculatorView({super.key});
 
   @override
-  State<CalculatorTab> createState() => _CalculatorTabState();
+  State<CalculatorView> createState() => _CalculatorViewState();
 }
 
-class _CalculatorTabState extends State<CalculatorTab> {
+class _CalculatorViewState extends State<CalculatorView> {
   String expression = '';
   String display = '0';
   double? firstOperand;
@@ -2591,7 +2834,7 @@ class _CalculatorTabState extends State<CalculatorTab> {
           style: ElevatedButton.styleFrom(
             backgroundColor: bg,
             foregroundColor: fg ?? Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 20),
+            padding: const EdgeInsets.symmetric(vertical: 18),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             elevation: 0,
           ),
@@ -2613,16 +2856,16 @@ class _CalculatorTabState extends State<CalculatorTab> {
         Expanded(
           child: Container(
             alignment: Alignment.bottomRight,
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(20),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(expression, style: const TextStyle(fontSize: 20, color: Colors.grey, fontWeight: FontWeight.w500)),
+                Text(expression, style: const TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 6),
                 FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Text(display, style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: Color(0xFF2979FF))),
+                  child: Text(display, style: const TextStyle(fontSize: 44, fontWeight: FontWeight.w900, color: Color(0xFF2979FF))),
                 ),
               ],
             ),
