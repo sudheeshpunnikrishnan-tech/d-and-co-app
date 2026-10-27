@@ -241,13 +241,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   String companyName = 'DAVIS & COMPANY';
   String companyLocation = 'ALUVA, ERNAKULAM';
-  final String appVersion = '1.1.7';
+  final String appVersion = '1.1.9';
 
   bool askSaveConfirmation = true;
   bool enableLabourCharge = true;
   double defaultLabourPerBag = 3.0;
   
-  // Category-based coolie settings
   bool enableCategoryCoolie = true;
   double riceCooliePerBag = 9.0;
   double provisionCooliePerBag = 8.0;
@@ -809,6 +808,7 @@ class DashboardHomeScreen extends StatelessWidget {
     }
 
     return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -935,7 +935,7 @@ class DashboardHomeScreen extends StatelessWidget {
                     style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2979FF)),
                   ),
                 ),
-                title: Text(e['CUSTOMER NAME'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w700)),
+                title: Text(e['CUSTOMER NAME'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
                 subtitle: Text("${e['ESTIMATE NO']} • ${_cleanDate(e['DATE'])} • $pMode", style: const TextStyle(fontSize: 12)),
                 trailing: Text(
                   '₹${e['TOTAL AMOUNT']}',
@@ -1115,7 +1115,6 @@ class _EstimateScreenState extends State<EstimateScreen> {
               }
             }
 
-            // Look up category from existing items
             for (var it in widget.items) {
               if ((it['ITEM NAME'] ?? '').toString().trim().toUpperCase() == name.toUpperCase()) {
                 category = (it['CATEGORY'] ?? it['CAT'] ?? '').toString().toUpperCase();
@@ -1155,7 +1154,6 @@ class _EstimateScreenState extends State<EstimateScreen> {
         } else if (cat.contains('PROVISION') || cat.contains('മളിക')) {
           calculatedLabour += bagCount * widget.provisionCooliePerBag;
         } else {
-          // If no specific category matched, check item name keywords or use provision as fallback
           final name = (it['name'] ?? '').toString().toUpperCase();
           if (name.contains('RICE') || name.contains('VADI') || name.contains('JAYA') || name.contains('MATTA') || name.contains('SONA')) {
             calculatedLabour += bagCount * widget.riceCooliePerBag;
@@ -1175,8 +1173,6 @@ class _EstimateScreenState extends State<EstimateScreen> {
     labourController.text = calculatedLabour.toStringAsFixed(1);
   }
 
-  // Inclusive Tax Calculations:
-  // Item total is already inclusive of tax.
   double get totalInclusiveItemsAmount {
     double sum = 0;
     for (var b in billItems) {
@@ -1466,20 +1462,12 @@ class _EstimateScreenState extends State<EstimateScreen> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) {
         String filter = '';
-        String selectedCategory = 'ALL';
 
         return StatefulBuilder(
           builder: (context, setModalState) {
             final filteredItems = widget.items.where((it) {
               final name = (it['ITEM NAME'] ?? '').toString().toLowerCase();
-              final unit = (it['RATE PER KG/BAG'] ?? '').toString().toUpperCase();
-              final cat = (it['CATEGORY'] ?? '').toString().toUpperCase();
-              final matchesQuery = name.contains(filter.toLowerCase());
-              if (selectedCategory == 'BAG') return matchesQuery && unit.contains('BAG');
-              if (selectedCategory == 'KG') return matchesQuery && unit.contains('KG');
-              if (selectedCategory == 'RICE') return matchesQuery && (cat.contains('RICE') || name.contains('RICE') || name.contains('VADI') || name.contains('JAYA'));
-              if (selectedCategory == 'PROVISION') return matchesQuery && (cat.contains('PROVISION') || (!cat.contains('RICE') && !name.contains('RICE') && !name.contains('VADI')));
-              return matchesQuery;
+              return name.contains(filter.toLowerCase());
             }).toList();
 
             return Container(
@@ -1512,43 +1500,6 @@ class _EstimateScreenState extends State<EstimateScreen> {
                       filled: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        ChoiceChip(
-                          label: const Text('All Items'),
-                          selected: selectedCategory == 'ALL',
-                          onSelected: (_) => setModalState(() => selectedCategory = 'ALL'),
-                        ),
-                        const SizedBox(width: 6),
-                        ChoiceChip(
-                          label: const Text('Rice (അരി - ₹9)'),
-                          selected: selectedCategory == 'RICE',
-                          onSelected: (_) => setModalState(() => selectedCategory = 'RICE'),
-                        ),
-                        const SizedBox(width: 6),
-                        ChoiceChip(
-                          label: const Text('Provision (₹8)'),
-                          selected: selectedCategory == 'PROVISION',
-                          onSelected: (_) => setModalState(() => selectedCategory = 'PROVISION'),
-                        ),
-                        const SizedBox(width: 6),
-                        ChoiceChip(
-                          label: const Text('Bags'),
-                          selected: selectedCategory == 'BAG',
-                          onSelected: (_) => setModalState(() => selectedCategory == 'BAG'),
-                        ),
-                        const SizedBox(width: 6),
-                        ChoiceChip(
-                          label: const Text('KG'),
-                          selected: selectedCategory == 'KG',
-                          onSelected: (_) => setModalState(() => selectedCategory == 'KG'),
-                        ),
-                      ],
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1765,7 +1716,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Text('Customer: $cust', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
-                    pw.Text('Payment: $pMode', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                    pw.Text('Payment: $pMode', style: const pw.TextStyle(fontSize: 12)),
                   ],
                 ),
                 pw.SizedBox(height: 12),
@@ -1927,7 +1878,7 @@ class _EstimateScreenState extends State<EstimateScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: dynamic,
                           children: [
                             Flexible(
                               child: Text(
@@ -2440,10 +2391,10 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(18),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2466,11 +2417,19 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   Text('Date: ${_cleanDate(est['DATE'])}', style: const TextStyle(color: Colors.grey)),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
+              // Customer Name & Payment Badge with overflow fix
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Customer: ${est['CUSTOMER NAME'] ?? '-'}', style: const TextStyle(color: Colors.amberAccent, fontSize: 15, fontWeight: FontWeight.bold)),
+                  Expanded(
+                    child: Text(
+                      'Customer: ${est['CUSTOMER NAME'] ?? '-'}',
+                      style: const TextStyle(color: Colors.amberAccent, fontSize: 14.5, fontWeight: FontWeight.bold),
+                      softWrap: true,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
@@ -2481,7 +2440,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   ),
                 ],
               ),
-              const Divider(height: 22),
+              const Divider(height: 20),
               const Text('Items Breakdown:', style: TextStyle(fontSize: 13, color: Color(0xFF2979FF), fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Flexible(
@@ -2502,11 +2461,13 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                             children: [
                               Row(
                                 children: [
-                                  Text(item['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                                  Expanded(
+                                    child: Text(item['name'].toString(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                                  ),
                                   if (tRate > 0)
                                     Padding(
-                                      padding: const EdgeInsets.only(left: 6.0),
-                                      child: Text('$tRate% GST (Incl)', style: const TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      padding: const EdgeInsets.only(left: 4.0),
+                                      child: Text('$tRate% GST', style: const TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
                                     ),
                                 ],
                               ),
@@ -2514,13 +2475,14 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                             ],
                           ),
                         ),
+                        const SizedBox(width: 6),
                         Text('₹${item['total']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.greenAccent, fontSize: 13)),
                       ],
                     );
                   },
                 ),
               ),
-              const Divider(height: 22),
+              const Divider(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -2528,13 +2490,13 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   Text('₹${est['TOTAL AMOUNT'] ?? '0'}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10)),
-                      icon: const Icon(Icons.edit, size: 15, color: Colors.orangeAccent),
+                      icon: const Icon(Icons.edit, size: 14, color: Colors.orangeAccent),
                       label: const Text('Edit Bill', style: TextStyle(fontSize: 12, color: Colors.orangeAccent)),
                       onPressed: () {
                         Navigator.pop(ctx);
@@ -2546,7 +2508,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10)),
-                      icon: const Icon(Icons.picture_as_pdf, size: 15),
+                      icon: const Icon(Icons.picture_as_pdf, size: 14),
                       label: const Text('View PDF', style: TextStyle(fontSize: 12)),
                       onPressed: () {
                         Navigator.pop(ctx);
@@ -2558,7 +2520,7 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
                   Expanded(
                     child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 10)),
-                      icon: const Icon(Icons.share, size: 15),
+                      icon: const Icon(Icons.share, size: 14),
                       label: const Text('WhatsApp', style: TextStyle(fontSize: 12)),
                       onPressed: () {
                         Navigator.pop(ctx);
@@ -2672,33 +2634,81 @@ class _SavedEstimatesTabState extends State<SavedEstimatesTab> {
             itemBuilder: (context, idx) {
               final est = filtered[idx] as Map<String, dynamic>;
               final pMode = (est['PAYMENT MODE'] ?? est['PAYMENT_MODE'] ?? est['PAYMENT'] ?? 'CASH').toString().toUpperCase();
+              
+              // 2-Row Clean Layout with ample vertical spacing and wrapping
               return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
+                margin: const EdgeInsets.only(bottom: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
                   onTap: () => _viewInvoiceDetails(est),
-                  title: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(est['CUSTOMER NAME'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      Text(pMode, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: pMode == 'CREDIT' ? Colors.orangeAccent : Colors.greenAccent)),
-                    ],
-                  ),
-                  subtitle: Text("${est['ESTIMATE NO']} • ${_cleanDate(est['DATE'])}"),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('₹${est['TOTAL AMOUNT']}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
-                      IconButton(
-                        icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 20),
-                        tooltip: 'View PDF',
-                        onPressed: () => _previewExistingPdf(est),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.share, color: Colors.green, size: 20),
-                        tooltip: 'WhatsApp',
-                        onPressed: () => _shareSavedWhatsApp(est),
-                      ),
-                    ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Row 1: Full customer name with badge
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                est['CUSTOMER NAME'] ?? 'Unknown',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                softWrap: true,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: (pMode == 'CREDIT' ? Colors.orange : (pMode == 'UPI' ? Colors.blue : Colors.green)).withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                pMode,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: pMode == 'CREDIT' ? Colors.orangeAccent : (pMode == 'UPI' ? Colors.lightBlueAccent : Colors.greenAccent),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // Row 2: Details, amount and buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                "${est['ESTIMATE NO']} • ${_cleanDate(est['DATE'])}",
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ),
+                            Text(
+                              '₹${est['TOTAL AMOUNT']}',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.greenAccent),
+                            ),
+                            const SizedBox(width: 6),
+                            IconButton(
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.all(6),
+                              icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 20),
+                              tooltip: 'View PDF',
+                              onPressed: () => _previewExistingPdf(est),
+                            ),
+                            IconButton(
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.all(6),
+                              icon: const Icon(Icons.share, color: Colors.green, size: 20),
+                              tooltip: 'WhatsApp',
+                              onPressed: () => _shareSavedWhatsApp(est),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -2723,7 +2733,6 @@ class PriceListTab extends StatefulWidget {
 
 class _PriceListTabState extends State<PriceListTab> {
   String searchQuery = '';
-  String categoryFilter = 'ALL';
 
   void _showItemDetailModal(Map<String, dynamic> item) {
     showDialog(
@@ -2931,15 +2940,8 @@ class _PriceListTabState extends State<PriceListTab> {
     final filtered = widget.items.where((raw) {
       final it = raw as Map<String, dynamic>;
       final name = (it['ITEM NAME'] ?? '').toString().toLowerCase();
-      final unit = (it['RATE PER KG/BAG'] ?? '').toString().toUpperCase();
-      final cat = (it['CATEGORY'] ?? '').toString().toUpperCase();
       final q = searchQuery.toLowerCase();
-      final matchesQuery = name.contains(q);
-      if (categoryFilter == 'BAG') return matchesQuery && unit.contains('BAG');
-      if (categoryFilter == 'KG') return matchesQuery && unit.contains('KG');
-      if (categoryFilter == 'RICE') return matchesQuery && (cat.contains('RICE') || name.contains('RICE') || name.contains('VADI') || name.contains('JAYA'));
-      if (categoryFilter == 'PROVISION') return matchesQuery && (cat.contains('PROVISION') || (!cat.contains('RICE') && !name.contains('RICE') && !name.contains('VADI')));
-      return matchesQuery;
+      return name.contains(q);
     }).toList();
 
     return Scaffold(
@@ -2965,44 +2967,6 @@ class _PriceListTabState extends State<PriceListTab> {
               ),
             ),
           ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                ChoiceChip(
-                  label: const Text('All Items'),
-                  selected: categoryFilter == 'ALL',
-                  onSelected: (_) => setState(() => categoryFilter = 'ALL'),
-                ),
-                const SizedBox(width: 6),
-                ChoiceChip(
-                  label: const Text('Rice (അരി - ₹9)'),
-                  selected: categoryFilter == 'RICE',
-                  onSelected: (_) => setState(() => categoryFilter = 'RICE'),
-                ),
-                const SizedBox(width: 6),
-                ChoiceChip(
-                  label: const Text('Provision (₹8)'),
-                  selected: categoryFilter == 'PROVISION',
-                  onSelected: (_) => setState(() => categoryFilter = 'PROVISION'),
-                ),
-                const SizedBox(width: 6),
-                ChoiceChip(
-                  label: const Text('Bags'),
-                  selected: categoryFilter == 'BAG',
-                  onSelected: (_) => setState(() => categoryFilter = 'BAG'),
-                ),
-                const SizedBox(width: 6),
-                ChoiceChip(
-                  label: const Text('KG'),
-                  selected: categoryFilter == 'KG',
-                  onSelected: (_) => setState(() => categoryFilter = 'KG'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 12),
